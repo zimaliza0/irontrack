@@ -368,6 +368,30 @@ async function getProgress(userId, exerciseId) {
     .sort((a, b) => new Date(a['Дата']).getTime() - new Date(b['Дата']).getTime());
 }
 
+async function deleteUser(userId) {
+  if (!userId) throw new Error('Не указан спортсмен.');
+  const sh = await sheet(CFG.USERS);
+  const gsRows = await sh.getRows();
+  const row = gsRows.find((r) => String(r.get('UserID')) === String(userId));
+  if (!row) throw new Error('Спортсмен не найден.');
+  row.set('Активен', false);
+  await row.save();
+  return true;
+}
+
+// В режиме Google Sheets отдельный механизм резервных копий не нужен — у самой таблицы
+// есть встроенная история версий (Файл → История версий в интерфейсе Google Sheets),
+// которая и служит бэкапом. Эти функции — просто заглушки, чтобы общий API не падал.
+async function createBackup() {
+  return null;
+}
+async function listBackups() {
+  return [];
+}
+async function getBackup() {
+  throw new Error('В режиме Google Sheets резервные копии не нужны — используйте "Файл → История версий" в самой таблице.');
+}
+
 module.exports = {
   CFG,
   HEADERS,
@@ -384,4 +408,8 @@ module.exports = {
   finishWorkout,
   deleteWorkout,
   getProgress,
+  deleteUser,
+  createBackup,
+  listBackups,
+  getBackup,
 };

@@ -260,11 +260,13 @@ async function finishWorkout(workoutId, note, durationSeconds) {
   w['Заметки'] = note || '';
   w['Статус'] = 'Завершена';
   saveDB(db);
+  createBackup('finishWorkout').catch(() => {});
   return true;
 }
 
 async function deleteWorkout(workoutId) {
   if (!workoutId) throw new Error('Не указана тренировка.');
+  await createBackup('deleteWorkout').catch(() => {});
   const db = loadDB();
   const before = db[CFG.WORKOUTS].length;
   db[CFG.WORKOUTS] = db[CFG.WORKOUTS].filter((w) => String(w.WorkoutID) !== String(workoutId));
@@ -278,6 +280,53 @@ async function getProgress(userId, exerciseId) {
   return db[CFG.PROGRESS]
     .filter((x) => (!userId || x.UserID === userId) && (!exerciseId || x.ExerciseID === exerciseId))
     .sort((a, b) => new Date(a['Дата']).getTime() - new Date(b['Дата']).getTime());
+}
+
+async function deleteUser(userId) {
+  if (!userId) throw new Error('Не указан спортсмен.');
+  const db = loadDB();
+  const u = db[CFG.USERS].find((x) => x.UserID === userId);
+  if (!u) throw new Error('Спортсмен не найден.');
+  u['Активен'] = false;
+  saveDB(db);
+  return true;
+}
+
+// --- Резервные копии (локальный режим) ---
+// Снимки складываются как отдельные JSON-файлы в server/data/backups/ — на вашем ПК это
+// просто ещё папка с файлами, можно копировать/архивировать вручную когда захочется.
+const BACKUPS_DIR = path.join(__dirname, '..', 'data', 'backups');
+const MAX_BACKUPS = 20;
+
+function ensureBackupsDir() {
+  if (!fs.existsSync(BACKUPS_DIR)) fs.mkdirSync(BACKUPS_DIR, { recursive: true });
+}
+
+async function createBackup(reason) {
+  ensureBackupsDir();
+  const db = loadDB();
+  const backupId = 'B' + Date.now();
+  const payload = { id: backupId, createdAt: now(), reason: reason || 'manual', data: db };
+  fs.writeFileSync(path.join(BACKUPS_DIR, backupId + '.json'), JSON.stringify(payload, null, 2), 'utf8');
+  const files = fs.readdirSync(BACKUPS_DIR).filter((f) => f.endsWith('.json')).sort().reverse();
+  files.slice(MAX_BACKUPS).forEach((f) => fs.unlinkSync(path.join(BACKUPS_DIR, f)));
+  return backupId;
+}
+
+async function listBackups() {
+  ensureBackupsDir();
+  const files = fs.readdirSync(BACKUPS_DIR).filter((f) => f.endsWith('.json')).sort().reverse();
+  return files.map((f) => {
+    const payload = JSON.parse(fs.readFileSync(path.join(BACKUPS_DIR, f), 'utf8'));
+    return { id: payload.id, CreatedAt: payload.createdAt, Reason: payload.reason };
+  });
+}
+
+async function getBackup(backupId) {
+  ensureBackupsDir();
+  const file = path.join(BACKUPS_DIR, backupId + '.json');
+  if (!fs.existsSync(file)) throw new Error('Резервная копия не найдена.');
+  return JSON.parse(fs.readFileSync(file, 'utf8'));
 }
 
 module.exports = {
@@ -295,4 +344,8 @@ module.exports = {
   finishWorkout,
   deleteWorkout,
   getProgress,
+  deleteUser,
+  createBackup,
+  listBackups,
+  getBackup,
 };

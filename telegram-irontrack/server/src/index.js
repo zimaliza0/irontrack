@@ -60,6 +60,12 @@ app.delete('/api/workouts/:id', h((req) => sheets.deleteWorkout(req.params.id)))
 
 app.get('/api/progress', h((req) => sheets.getProgress(req.query.userId, req.query.exerciseId)));
 
+app.delete('/api/users/:id', h((req) => sheets.deleteUser(req.params.id)));
+
+app.post('/api/backups', h(() => sheets.createBackup('manual')));
+app.get('/api/backups', h(() => sheets.listBackups()));
+app.get('/api/backups/:id', h((req) => sheets.getBackup(req.params.id)));
+
 const port = process.env.PORT || 3000;
 sheets.ensureSchema()
   .then(() => {

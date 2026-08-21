@@ -98,6 +98,12 @@ const TABLES = {
     "Лучший e1RM, кг" REAL,
     "WorkoutID" TEXT
   )`,
+  backups: `CREATE TABLE IF NOT EXISTS backups (
+    "id" TEXT PRIMARY KEY,
+    "CreatedAt" TEXT,
+    "Reason" TEXT,
+    "Data" TEXT
+  )`,
 };
 
 async function ensureSchema() {
@@ -281,11 +287,13 @@ async function finishWorkout(workoutId, note, durationSeconds) {
     'Завершена',
     workoutId,
   ]);
+  createBackup('finishWorkout').catch(() => {});
   return true;
 }
 
 async function deleteWorkout(workoutId) {
   if (!workoutId) throw new Error('Не указана тренировка.');
+  await createBackup('deleteWorkout').catch(() => {});
   const res = await run('DELETE FROM workouts WHERE "WorkoutID" = ?', [workoutId]);
   if (!(res.rowsAffected > 0)) throw new Error('Тренировка не найдена.');
   return true;
@@ -298,6 +306,52 @@ async function getProgress(userId, exerciseId) {
   if (exerciseId) { sql += ' AND "ExerciseID" = ?'; args.push(exerciseId); }
   const rows = await all(sql, args);
   return rows.sort((a, b) => new Date(a['Дата']).getTime() - new Date(b['Дата']).getTime());
+}
+
+async function deleteUser(userId) {
+  if (!userId) throw new Error('Не указан спортсмен.');
+  const res = await run('UPDATE users SET "Активен" = 0 WHERE "UserID" = ?', [userId]);
+  if (!(res.rowsAffected > 0)) throw new Error('Спортсмен не найден.');
+  return true;
+}
+
+// --- Резервные копии ---
+// Полный снимок всех таблиц кладём в саму базу (табличка backups), храним последние
+// MAX_BACKUPS штук. Это не отдельный сервис и не файл на диске сервера (который на Render
+// эфемерный) — снимок живёт в той же Turso-базе, что и сами данные, но отдельной строкой,
+// так что случайное удаление/порчу основных таблиц можно откатить вручную по данным снимка.
+const BACKUP_TABLES = ['users', 'exercises', 'templates', 'template_ex', 'workouts', 'sets', 'progress'];
+
+async function createBackup(reason) {
+  const dump = {};
+  for (const t of BACKUP_TABLES) {
+    dump[t] = await all(`SELECT * FROM ${t}`);
+  }
+  const backupId = 'B' + Date.now();
+  await run('INSERT INTO backups ("id","CreatedAt","Reason","Data") VALUES (?,?,?,?)', [
+    backupId,
+    now(),
+    reason || 'manual',
+    JSON.stringify(dump),
+  ]);
+  // Держим только последние MAX_BACKUPS штук, чтобы база не пухла бесконечно
+  const ids = await all('SELECT "id" FROM backups ORDER BY "CreatedAt" DESC');
+  const toDelete = ids.slice(MAX_BACKUPS).map((r) => r.id);
+  for (const oldId of toDelete) {
+    await run('DELETE FROM backups WHERE "id" = ?', [oldId]);
+  }
+  return backupId;
+}
+
+async function listBackups() {
+  const rows = await all('SELECT "id","CreatedAt","Reason" FROM backups ORDER BY "CreatedAt" DESC');
+  return rows;
+}
+
+async function getBackup(backupId) {
+  const rows = await all('SELECT * FROM backups WHERE "id" = ?', [backupId]);
+  if (!rows.length) throw new Error('Резервная копия не найдена.');
+  return { id: rows[0].id, createdAt: rows[0].CreatedAt, reason: rows[0].Reason, data: JSON.parse(rows[0].Data) };
 }
 
 module.exports = {
@@ -314,4 +368,8 @@ module.exports = {
   finishWorkout,
   deleteWorkout,
   getProgress,
+  deleteUser,
+  createBackup,
+  listBackups,
+  getBackup,
 };
