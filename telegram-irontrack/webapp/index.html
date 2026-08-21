@@ -208,6 +208,10 @@ const API_ROUTES = {
   finishWorkout: (workoutId, note, durationSeconds) => ({ method: 'POST', url: '/api/workouts/' + encodeURIComponent(workoutId) + '/finish', body: { note, durationSeconds } }),
   deleteWorkout: (workoutId) => ({ method: 'DELETE', url: '/api/workouts/' + encodeURIComponent(workoutId) }),
   getProgress: (userId, exerciseId) => ({ method: 'GET', url: '/api/progress?userId=' + encodeURIComponent(userId || '') + '&exerciseId=' + encodeURIComponent(exerciseId || '') }),
+  deleteUser: (userId) => ({ method: 'DELETE', url: '/api/users/' + encodeURIComponent(userId) }),
+  createBackup: () => ({ method: 'POST', url: '/api/backups' }),
+  listBackups: () => ({ method: 'GET', url: '/api/backups' }),
+  getBackup: (backupId) => ({ method: 'GET', url: '/api/backups/' + encodeURIComponent(backupId) }),
 };
 
 async function callBackend(fnName, args) {
@@ -553,13 +557,55 @@ function setupFieldAutocomplete(inputId, suggestionsId, dataKey) {
 
 function renderLibrary(){
   const templates=userTemplates();
-  let html='<div class="card"><div class="title">Шаблоны выбранного спортсмена</div><div class="sub">Каждый клиент видит и запускает только свои шаблоны.</div><div style="height:10px"></div>'+templateForm()+'</div><div style="height:12px"></div><div class="card"><div class="list">'+(templates.length?templates.map(templateItem).join(''):'<div class="empty">У этого спортсмена пока нет шаблонов.</div>')+'</div></div><div style="height:12px"></div><div class="grid2"><div class="card"><div class="title">Добавить спортсмена</div>'+userForm()+'</div><div class="card"><div class="title">Новое упражнение</div>'+exerciseForm()+'</div></div><div style="height:12px"></div><div class="card"><div class="title">База упражнений <span class="sub">('+DATA.exercises.length+')</span></div><div class="list">'+DATA.exercises.map(e=>'<div class="item"><div class="row"><div><b>'+esc(e['Название'])+'</b><div class="sub">'+esc(e['Категория'])+' · '+esc(e['Мышца'])+' · '+esc(e['Оборудование'])+'</div></div><span class="badge">'+esc(e['Тип'])+'</span></div></div>').join('')+'</div></div>';
+  let html='<div class="card"><div class="title">Шаблоны выбранного спортсмена</div><div class="sub">Каждый клиент видит и запускает только свои шаблоны.</div><div style="height:10px"></div>'+templateForm()+'</div><div style="height:12px"></div><div class="card"><div class="list">'+(templates.length?templates.map(templateItem).join(''):'<div class="empty">У этого спортсмена пока нет шаблонов.</div>')+'</div></div><div style="height:12px"></div><div class="grid2"><div class="card"><div class="title">Спортсмены</div><div class="list">'+DATA.users.map(userItem).join('')+'</div><div class="divider"></div>'+userForm()+'</div><div class="card"><div class="title">Новое упражнение</div>'+exerciseForm()+'</div></div><div style="height:12px"></div><div class="card"><div class="title">База упражнений <span class="sub">('+DATA.exercises.length+')</span></div><div class="list">'+DATA.exercises.map(e=>'<div class="item"><div class="row"><div><b>'+esc(e['Название'])+'</b><div class="sub">'+esc(e['Категория'])+' · '+esc(e['Мышца'])+' · '+esc(e['Оборудование'])+'</div></div><span class="badge">'+esc(e['Тип'])+'</span></div></div>').join('')+'</div></div>'+backupsBlock();
   $('view').innerHTML = html;
   // Настраиваем автодополнение для полей
   setupFieldAutocomplete('en', 'suggestionsName', 'Название');
   setupFieldAutocomplete('ec', 'suggestionsCategory', 'Категория');
   setupFieldAutocomplete('em', 'suggestionsMuscle', 'Мышца');
   setupFieldAutocomplete('ee', 'suggestionsEquipment', 'Оборудование');
+  refreshBackupsList();
+}
+function userItem(u){
+  return '<div class="item row"><div><b>'+esc(u['Имя'])+'</b><div class="sub">'+esc(u['Пол']||'')+(u['Пол']?' · ':'')+(u['Вес, кг']?esc(u['Вес, кг'])+' кг':'')+'</div></div><button class="btn small red" onclick="deleteUserFromLibrary(\''+esc(u.UserID)+'\')">Удалить</button></div>';
+}
+function deleteUserFromLibrary(userId){
+  const u = DATA.users.find(x=>x.UserID===userId);
+  if(!u) return;
+  if(!confirm('Удалить спортсмена «'+u['Имя']+'»?\nШаблоны и история тренировок останутся в базе (можно восстановить из резервной копии), но спортсмен пропадёт из списка.')) return;
+  invoke('deleteUser',[userId],()=>{
+    toast('Спортсмен удалён из списка');
+    load();
+  });
+}
+
+// --- Резервные копии ---
+function backupsBlock(){
+  return '<div style="height:12px"></div><div class="card"><div class="row"><div><div class="title">Резервные копии</div><div class="sub">Создаются автоматически при завершении/удалении тренировки, плюс можно вручную.</div></div><button class="btn small secondary" onclick="createBackupNow()">Создать сейчас</button></div><div style="height:10px"></div><div class="list" id="backupsList"><div class="empty">Загрузка…</div></div></div>';
+}
+function createBackupNow(){
+  invoke('createBackup',[],()=>{
+    toast('Резервная копия создана');
+    refreshBackupsList();
+  });
+}
+function refreshBackupsList(){
+  const el = $('backupsList');
+  if (!el) return;
+  google.script.run.withSuccessHandler(list=>{
+    if (!list || !list.length) { el.innerHTML = '<div class="empty">Резервных копий пока нет.</div>'; return; }
+    el.innerHTML = list.map(b=>'<div class="item row"><div><b>'+date(b.CreatedAt)+' '+time(b.CreatedAt)+'</b><div class="sub">'+esc(b.Reason||'')+'</div></div><button class="btn small secondary" onclick="downloadBackup(\''+esc(b.id)+'\')">Скачать JSON</button></div>').join('');
+  }).withFailureHandler(()=>{ el.innerHTML = '<div class="empty">Не удалось загрузить список (для Google Sheets режима это ожидаемо — там есть своя история версий).</div>'; }).listBackups();
+}
+function downloadBackup(backupId){
+  google.script.run.withSuccessHandler(backup=>{
+    const blob = new Blob([JSON.stringify(backup, null, 2)], {type:'application/json'});
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url; a.download = 'irontrack-backup-'+backupId+'.json';
+    document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(()=>URL.revokeObjectURL(url), 4000);
+  }).withFailureHandler(e=>toast('Не удалось скачать: '+(e&&e.message?e.message:e))).getBackup(backupId);
 }
 
 function exerciseForm(){
@@ -591,6 +637,48 @@ function templateForm(){return '<div class="form"><div class="field full"><label
 function addTemplate(){invoke('addTemplate',[{name:$('tn').value,description:$('td').value,userId:uid()}],()=>{toast('Шаблон создан для выбранного спортсмена');load()})}
 function templateItem(t){const ex=DATA.templateEx.filter(x=>x.TemplateID===t.TemplateID).sort((a,b)=>Number(a['Порядок'])-Number(b['Порядок']));return '<div class="item"><div class="row"><div><b>'+esc(t['Название'])+'</b><div class="template-owner">'+ex.length+' упражн. · создан '+date(t['Создан'])+'</div><div class="sub">'+esc(t['Описание']||'')+'</div></div><button class="btn small secondary" onclick="editTemplate(\''+esc(t.TemplateID)+'\')">Изменить</button></div><div class="sub" style="margin-top:8px">'+(ex.length?ex.map(x=>{const e=DATA.exercises.find(y=>y.ExerciseID===x.ExerciseID);return esc(e?e['Название']:x.ExerciseID)+' · '+esc(x['Сеты'])+'×'+esc(x['Повторы'])}).join('<br>'):'Упражнений нет')+'</div></div>'}
 let localExercises = []; let currentTemplateId = null;
+
+// Список упражнений для добавления в шаблон: сгруппирован по мышечной группе,
+// с живым поиском по подстроке (а не только с начала слова) — набрав "верх",
+// найдётся и «Тяга верхнего блока».
+function buildExercisePicker(){
+  const groups = {};
+  DATA.exercises.forEach(e => {
+    const key = e['Мышца'] && e['Мышца'].trim() ? e['Мышца'] : 'Без группы';
+    (groups[key] = groups[key] || []).push(e);
+  });
+  const groupNames = Object.keys(groups).sort((a,b)=>a.localeCompare(b,'ru'));
+  return groupNames.map(g => {
+    const items = groups[g].map(e => {
+      const searchBlob = [e['Название'], e['Категория'], e['Мышца'], e['Оборудование']].join(' ').toLowerCase();
+      return '<label class="ex-pick-item" data-search="'+esc(searchBlob)+'" style="display:flex;align-items:center;justify-content:space-between;padding:9px 4px;border-bottom:1px solid #222;cursor:pointer">'
+        + '<span>'+esc(e['Название'])+'</span>'
+        + '<input type="checkbox" class="ex-check" value="'+esc(e.ExerciseID)+'" style="width:20px;height:20px;flex-shrink:0">'
+        + '</label>';
+    }).join('');
+    return '<details class="ex-group"><summary style="cursor:pointer;padding:9px 4px;font-weight:800;color:var(--muted)">'+esc(g)+' <span class="sub">('+groups[g].length+')</span></summary>'+items+'</details>';
+  }).join('');
+}
+function filterExercisePicker(){
+  const q = (($('exSearch') || {}).value || '').toLowerCase().trim();
+  document.querySelectorAll('#exPickerList .ex-group').forEach(group => {
+    let anyVisible = false;
+    group.querySelectorAll('.ex-pick-item').forEach(item => {
+      const match = !q || item.dataset.search.includes(q);
+      item.style.display = match ? 'flex' : 'none';
+      if (match) anyVisible = true;
+    });
+    group.style.display = anyVisible ? '' : 'none';
+    if (q) group.open = anyVisible;
+  });
+}
+function setVisibleChecks(value){
+  document.querySelectorAll('#exPickerList .ex-pick-item').forEach(item => {
+    if (item.style.display === 'none') return;
+    const cb = item.querySelector('.ex-check');
+    if (cb) cb.checked = value;
+  });
+}
 function editTemplate(templateId){
   const t=DATA.templates.find(x=>x.TemplateID===templateId);
   if(!t||t['Владелец UserID']!==uid()){toast('Этот шаблон принадлежит другому спортсмену');return}
@@ -608,9 +696,7 @@ function renderTemplateEditor(){
     const downDisabled = idx === ex.length - 1;
     return '<div class="item row" data-id="'+esc(x.TemplateExerciseID)+'"><div><b>'+esc(name)+'</b><div class="sub">'+esc(x['Сеты'])+' × '+esc(x['Повторы'])+' · '+esc(x['Отдых, сек'])+' сек</div></div><div style="display:flex;gap:6px"><button class="btn small secondary" '+(upDisabled?'disabled style="opacity:0.3"':'')+' onclick="moveLocalExercise('+idx+',-1)">↑</button><button class="btn small secondary" '+(downDisabled?'disabled style="opacity:0.3"':'')+' onclick="moveLocalExercise('+idx+',1)">↓</button><button class="btn small red" onclick="removeLocalExercise(\''+esc(x.TemplateExerciseID)+'\')">✕</button></div></div>';
   }).join('') : '<div class="empty">Добавьте упражнения ниже</div>';
-  const allEx = DATA.exercises.map(e => 
-    '<label style="display:flex;align-items:center;justify-content:space-between;padding:6px 0;border-bottom:1px solid #222;cursor:pointer"><span>'+esc(e['Название'])+'</span><input type="checkbox" class="ex-check" value="'+esc(e.ExerciseID)+'" style="width:20px;height:20px;flex-shrink:0"></label>'
-  ).join('');
+  const allEx = buildExercisePicker();
   const html = `
     <div class="card">
       <div class="row">
@@ -623,16 +709,16 @@ function renderTemplateEditor(){
       <div class="divider"></div>
       <div class="row" style="margin-bottom:10px">
         <div class="title">Упражнения в шаблоне</div>
-        <button class="btn small secondary" onclick="saveTemplateOrder()">Сохранить порядок</button>
       </div>
       <div class="list" id="template-ex-list">${exList}</div>
       <div class="divider"></div>
       <div class="title">Добавить упражнения (выберите галочками)</div>
+      <div class="field" style="margin-bottom:10px"><input id="exSearch" placeholder="Поиск по названию, например «верх»" autocomplete="off" oninput="filterExercisePicker()"></div>
       <div style="display:flex;gap:10px;margin-bottom:10px">
-        <button class="btn small secondary" onclick="document.querySelectorAll('.ex-check').forEach(c=>c.checked=true)">Выбрать все</button>
-        <button class="btn small secondary" onclick="document.querySelectorAll('.ex-check').forEach(c=>c.checked=false)">Снять все</button>
+        <button class="btn small secondary" onclick="setVisibleChecks(true)">Выбрать все видимые</button>
+        <button class="btn small secondary" onclick="setVisibleChecks(false)">Снять все</button>
       </div>
-      <div class="list" style="max-height:200px;overflow-y:auto;border:1px solid #333;border-radius:12px;padding:8px">${allEx}</div>
+      <div class="list" id="exPickerList" style="max-height:280px;overflow-y:auto;border:1px solid #333;border-radius:12px;padding:8px">${allEx}</div>
       <div class="form" style="margin-top:14px">
         <div class="field"><label>Сеты</label><input id="aes" type="number" value="3"></div>
         <div class="field"><label>Повторы</label><input id="aer" value="8-12"></div>
@@ -653,20 +739,18 @@ function moveLocalExercise(index, direction){
   localExercises[newIndex] = temp;
   localExercises.forEach((item, i) => item['Порядок'] = i + 1);
   renderTemplateEditor();
+  persistTemplateOrder();
 }
-function saveTemplateOrder(){
-  if (!currentTemplateId || !localExercises.length) { toast('Нет упражнений для сохранения'); return; }
+function persistTemplateOrder(){
+  if (!currentTemplateId || !localExercises.length) return;
   const orderData = localExercises.map(item => ({
     id: item.TemplateExerciseID,
     order: item['Порядок']
   }));
-  busy(true);
+  // Сохраняется сразу и без блокирующего индикатора — порядок упражнений не критичен,
+  // если запрос почему-то не пройдёт, следующее перемещение попробует снова.
   google.script.run
-    .withSuccessHandler(() => {
-      busy(false);
-      toast('Порядок сохранён');
-    })
-    .withFailureHandler(e => { busy(false); showError(e.message); })
+    .withFailureHandler(e => { toast('Не удалось сохранить порядок: ' + (e && e.message ? e.message : e)); })
     .updateTemplateOrder(currentTemplateId, orderData);
 }
 function removeLocalExercise(id){
@@ -713,8 +797,62 @@ function addTemplateExercisesLocal(templateId) {
     .withFailureHandler(e => { busy(false); showError(e.message); })
     .addTemplateExercises(payloads);
 }
-function renderProgress(){$('view').innerHTML='<div class="card"><div class="title">Прогресс 1ПМ</div><div class="form"><div class="field"><label>Упражнение</label><select id="pex"><option value="">Выбери упражнение</option>'+DATA.exercises.map(e=>'<option value="'+esc(e.ExerciseID)+'">'+esc(e['Название'])+'</option>').join('')+'</select></div><button class="btn" onclick="loadChart()">Показать</button></div><div id="chartWrap" style="margin-top:14px"><div class="empty">Выбери упражнение</div></div></div>'}
-function loadChart(){const ex=$('pex').value;if(!ex){toast('Выбери упражнение');return}invoke('getProgress',[uid(),ex],arr=>{const wrap=$('chartWrap');if(!arr||!arr.length){wrap.innerHTML='<div class="empty">По этому упражнению пока нет данных.</div>';return}const vals=arr.map(x=>Number(x['Лучший e1RM, кг'])||0),labels=arr.map(x=>date(x['Дата'])),max=Math.max(...vals,1),W=760,H=280,p=38,pts=vals.map((v,i)=>{const x=p+i*((W-2*p)/Math.max(vals.length-1,1));const y=H-p-(v/max)*(H-2*p);return[x,y]});wrap.innerHTML='<div class="chart"><svg viewBox="0 0 '+W+' '+H+'" width="100%" height="100%"><line x1="'+p+'" y1="'+(H-p)+'" x2="'+(W-p)+'" y2="'+(H-p)+'" stroke="#333"/><polyline fill="none" stroke="#e50914" stroke-width="4" points="'+pts.map(a=>a.join(',')).join(' ')+'"/>'+pts.map((a,i)=>'<circle cx="'+a[0]+'" cy="'+a[1]+'" r="5" fill="#fff" stroke="#e50914" stroke-width="3"><title>'+labels[i]+' — '+vals[i].toFixed(1)+' кг</title></circle>').join('')+'</svg></div><div class="legend"><span>'+esc(labels[0])+'</span><b>'+vals[vals.length-1].toFixed(1)+' кг</b><span>'+esc(labels[labels.length-1])+'</span></div>'})}
+function renderProgress(){
+  const u = uid();
+  const doneWorkoutIds = new Set(DATA.workouts.filter(w=>w.UserID===u && w['Статус']==='Завершена').map(w=>w.WorkoutID));
+  const relevantSets = DATA.sets.filter(s=>doneWorkoutIds.has(s.WorkoutID));
+
+  // По каждому упражнению берём лучший e1RM за тренировку (может быть несколько подходов
+  // одного упражнения за тренировку — берём максимум), и складываем точки по датам тренировок.
+  const byEx = {};
+  relevantSets.forEach(s=>{
+    const w = DATA.workouts.find(x=>x.WorkoutID===s.WorkoutID);
+    if (!w) return;
+    const e1 = Number(s['e1RM, кг']) || 0;
+    if (!byEx[s.ExerciseID]) byEx[s.ExerciseID] = {};
+    const cur = byEx[s.ExerciseID][w.WorkoutID];
+    if (!cur || e1 > cur.value) byEx[s.ExerciseID][w.WorkoutID] = { date: w['Дата'], value: e1 };
+  });
+
+  const exIds = Object.keys(byEx);
+  if (!exIds.length) {
+    $('view').innerHTML = '<div class="card"><div class="title">Прогресс 1ПМ</div><div class="empty">У этого спортсмена пока нет завершённых тренировок с подходами.</div></div>';
+    return;
+  }
+
+  // Упражнения с самой недавней активностью — сверху
+  const withMeta = exIds.map(exId=>{
+    const points = Object.values(byEx[exId]).sort((a,b)=>new Date(a.date)-new Date(b.date));
+    const ex = DATA.exercises.find(e=>e.ExerciseID===exId);
+    return { exId, name: ex ? ex['Название'] : exId, points, lastDate: new Date(points[points.length-1].date).getTime() };
+  }).sort((a,b)=>b.lastDate - a.lastDate);
+
+  let html = '<div class="stack">';
+  withMeta.forEach(item=>{ html += progressChartCard(item.name, item.points); });
+  html += '</div>';
+  $('view').innerHTML = html;
+}
+function progressChartCard(title, points){
+  if (points.length < 2) {
+    const v = points[0] ? points[0].value : 0;
+    return '<div class="card"><div class="title" style="margin-bottom:4px">'+esc(title)+'</div><div class="sub">Пока только одна тренировка с этим упражнением.</div><div style="height:8px"></div><div class="metric" style="text-align:left"><div class="num">'+v.toFixed(1)+' кг</div><div class="label">лучший e1RM</div></div></div>';
+  }
+  const vals = points.map(p=>p.value), labels = points.map(p=>date(p.date));
+  const max = Math.max(...vals, 1), min = Math.min(...vals, 0);
+  const W = 760, H = 180, pad = 30;
+  const range = Math.max(max - min, 1);
+  const pts = vals.map((v,i)=>{
+    const x = pad + i * ((W - 2*pad) / Math.max(vals.length - 1, 1));
+    const y = H - pad - ((v - min) / range) * (H - 2*pad);
+    return [x, y];
+  });
+  const svg = '<svg viewBox="0 0 '+W+' '+H+'" width="100%" height="100%">'
+    + '<line x1="'+pad+'" y1="'+(H-pad)+'" x2="'+(W-pad)+'" y2="'+(H-pad)+'" stroke="#333"/>'
+    + '<polyline fill="none" stroke="#e50914" stroke-width="4" points="'+pts.map(a=>a.join(',')).join(' ')+'"/>'
+    + pts.map((a,i)=>'<circle cx="'+a[0]+'" cy="'+a[1]+'" r="5" fill="#fff" stroke="#e50914" stroke-width="3"><title>'+labels[i]+' — '+vals[i].toFixed(1)+' кг</title></circle>').join('')
+    + '</svg>';
+  return '<div class="card"><div class="title" style="margin-bottom:2px">'+esc(title)+'</div><div class="sub" style="margin-bottom:6px">'+vals[vals.length-1].toFixed(1)+' кг сейчас · было '+vals[0].toFixed(1)+' кг</div><div class="chart" style="height:180px">'+svg+'</div><div class="legend"><span>'+esc(labels[0])+'</span><span>'+esc(labels[labels.length-1])+'</span></div></div>';
+}
 updateOnlineStatus();
 load();
 </script>
