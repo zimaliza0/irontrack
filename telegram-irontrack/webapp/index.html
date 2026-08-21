@@ -56,8 +56,8 @@
 .set-block{background:#141414;border:1px solid #2a2a2a;border-radius:12px;padding:10px 12px;display:flex;flex-direction:column;gap:6px}
 .set-number{font-size:22px;font-weight:950;color:var(--red);margin-bottom:2px}
 .set-fields{display:flex;gap:8px;flex-wrap:wrap}
-.set-fields .field{flex:1;min-width:60px}
-.set-fields .field input{padding:8px 6px;font-size:14px}
+.set-fields .field{flex:1;min-width:110px}
+.set-fields .field input{padding:10px 6px;font-size:16px}
 /* Баннер отсутствия сети */
 .offline-banner{position:fixed;top:0;left:0;right:0;z-index:90;background:#7a1116;color:#fff;text-align:center;font-size:13px;font-weight:700;padding:9px 10px calc(9px + env(safe-area-inset-top));display:none}
 .offline-banner.on{display:block}
@@ -97,7 +97,7 @@
   .app { padding: 18px 12px 110px; max-width: none; }
   .card { padding: 16px; overflow: hidden; }
   .sets-grid { grid-template-columns: 1fr; }
-  .set-fields .field { min-width: 70px; }
+  .set-fields .field { min-width: 120px; }
   .set-number { font-size: 24px; }
   .brand { font-size: 26px; }
   .userbox { min-width: 160px; padding: 14px; font-size: 18px; }
@@ -180,15 +180,15 @@ const tg = window.Telegram && window.Telegram.WebApp;
 if (tg) {
   tg.ready();
   tg.expand();
-  // Подхватываем цветовую тему Telegram поверх наших CSS-переменных (не обязательно,
-  // но выглядит естественнее внутри мессенджера)
+  // Подхватываем фон/текст из темы Telegram, но НЕ трогаем фирменный красный (--red) —
+  // он часть бренда приложения и не должен зависеть от того, какая тема выбрана в Telegram
+  // у конкретного пользователя (там может быть синяя, зелёная и т.д.).
   try {
     const tp = tg.themeParams || {};
     const root = document.documentElement.style;
     if (tp.bg_color) root.setProperty('--bg', tp.bg_color);
     if (tp.text_color) root.setProperty('--text', tp.text_color);
     if (tp.hint_color) root.setProperty('--muted', tp.hint_color);
-    if (tp.button_color) root.setProperty('--red', tp.button_color);
   } catch (e) {}
 }
 
@@ -374,7 +374,6 @@ function workoutCard(){
       html += '<div class="set-fields">';
       html += '<div class="field"><label>Вес, кг</label><div class="stepper"><button type="button" onclick="stepSet(\''+esc(p.ExerciseID)+'\','+idx+',\'weight\',-2.5)">−</button><input id="w_'+esc(s.tempId)+'" type="number" step="0.5" inputmode="decimal" value="'+esc(s.weight)+'" placeholder="0" onchange="updateSet(\''+esc(p.ExerciseID)+'\','+idx+',\'weight\',this.value)"><button type="button" onclick="stepSet(\''+esc(p.ExerciseID)+'\','+idx+',\'weight\',2.5)">+</button></div></div>';
       html += '<div class="field"><label>Повторы</label><div class="stepper"><button type="button" onclick="stepSet(\''+esc(p.ExerciseID)+'\','+idx+',\'reps\',-1)">−</button><input id="r_'+esc(s.tempId)+'" type="number" inputmode="numeric" value="'+esc(s.reps)+'" placeholder="0" onchange="updateSet(\''+esc(p.ExerciseID)+'\','+idx+',\'reps\',this.value)"><button type="button" onclick="stepSet(\''+esc(p.ExerciseID)+'\','+idx+',\'reps\',1)">+</button></div></div>';
-      html += '<div class="field"><label>RPE</label><input type="number" step="0.5" inputmode="decimal" value="'+esc(s.rpe)+'" placeholder="—" onchange="updateSet(\''+esc(p.ExerciseID)+'\','+idx+',\'rpe\',this.value)"></div>';
       html += '</div></div>';
     });
     html += '</div>';
@@ -833,17 +832,27 @@ function renderProgress(){
   $('view').innerHTML = html;
 }
 function progressChartCard(title, points){
+  const vals = points.map(p=>p.value);
+  const best = Math.max(...vals);
+  const recommended = Math.round((best * 0.85) / 2.5) * 2.5;
+  const recBlock = '<div class="row" style="margin-top:8px;padding-top:8px;border-top:1px solid var(--line)"><span class="sub">Рекомендуемый рабочий вес (85% от максимума)</span><b>'+recommended.toFixed(1)+' кг</b></div>';
+
   if (points.length < 2) {
-    const v = points[0] ? points[0].value : 0;
-    return '<div class="card"><div class="title" style="margin-bottom:4px">'+esc(title)+'</div><div class="sub">Пока только одна тренировка с этим упражнением.</div><div style="height:8px"></div><div class="metric" style="text-align:left"><div class="num">'+v.toFixed(1)+' кг</div><div class="label">лучший e1RM</div></div></div>';
+    return '<div class="card"><div class="title" style="margin-bottom:4px">'+esc(title)+'</div><div class="sub">Пока только одна тренировка с этим упражнением.</div><div style="height:8px"></div><div class="metric" style="text-align:left"><div class="num">'+best.toFixed(1)+' кг</div><div class="label">лучший e1RM</div></div>'+recBlock+'</div>';
   }
-  const vals = points.map(p=>p.value), labels = points.map(p=>date(p.date));
-  const max = Math.max(...vals, 1), min = Math.min(...vals, 0);
+  const labels = points.map(p=>date(p.date));
+  const max = Math.max(...vals), min = Math.min(...vals);
   const W = 760, H = 180, pad = 30;
-  const range = Math.max(max - min, 1);
+  // Не тянем шкалу к нулю — иначе на весах вроде 80-95кг разница в 10-15кг выглядит
+  // почти плоской линией. Берём фактический диапазон значений с небольшим запасом сверху/снизу,
+  // чтобы реальная динамика была видна.
+  const span = Math.max(max - min, max * 0.05, 2.5);
+  const rangeMin = min - span * 0.15;
+  const rangeMax = max + span * 0.15;
+  const range = rangeMax - rangeMin;
   const pts = vals.map((v,i)=>{
     const x = pad + i * ((W - 2*pad) / Math.max(vals.length - 1, 1));
-    const y = H - pad - ((v - min) / range) * (H - 2*pad);
+    const y = H - pad - ((v - rangeMin) / range) * (H - 2*pad);
     return [x, y];
   });
   const svg = '<svg viewBox="0 0 '+W+' '+H+'" width="100%" height="100%">'
@@ -851,7 +860,7 @@ function progressChartCard(title, points){
     + '<polyline fill="none" stroke="#e50914" stroke-width="4" points="'+pts.map(a=>a.join(',')).join(' ')+'"/>'
     + pts.map((a,i)=>'<circle cx="'+a[0]+'" cy="'+a[1]+'" r="5" fill="#fff" stroke="#e50914" stroke-width="3"><title>'+labels[i]+' — '+vals[i].toFixed(1)+' кг</title></circle>').join('')
     + '</svg>';
-  return '<div class="card"><div class="title" style="margin-bottom:2px">'+esc(title)+'</div><div class="sub" style="margin-bottom:6px">'+vals[vals.length-1].toFixed(1)+' кг сейчас · было '+vals[0].toFixed(1)+' кг</div><div class="chart" style="height:180px">'+svg+'</div><div class="legend"><span>'+esc(labels[0])+'</span><span>'+esc(labels[labels.length-1])+'</span></div></div>';
+  return '<div class="card"><div class="title" style="margin-bottom:2px">'+esc(title)+'</div><div class="sub" style="margin-bottom:6px">'+vals[vals.length-1].toFixed(1)+' кг сейчас · было '+vals[0].toFixed(1)+' кг · максимум '+best.toFixed(1)+' кг</div><div class="chart" style="height:180px">'+svg+'</div><div class="legend"><span>'+esc(labels[0])+'</span><span>'+esc(labels[labels.length-1])+'</span></div>'+recBlock+'</div>';
 }
 updateOnlineStatus();
 load();

@@ -111,7 +111,14 @@ function n(v, fallback) {
 }
 
 function e1rm(weight, reps) {
-  return reps <= 1 ? weight : weight * (1 + reps / 30);
+  if (reps <= 1) return weight;
+  const r = Math.min(reps, 36);
+  const epley = weight * (1 + reps / 30);
+  const brzycki = weight * 36 / (37 - r);
+  const lombardi = weight * Math.pow(reps, 0.10);
+  const oconner = weight * (1 + 0.025 * reps);
+  const avg = (epley + brzycki + lombardi + oconner) / 4;
+  return Math.round(avg / 2.5) * 2.5;
 }
 
 // ---- Публичные функции, повторяющие сигнатуры Code.gs ----
