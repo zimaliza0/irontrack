@@ -61,11 +61,9 @@
 /* Баннер отсутствия сети */
 .offline-banner{position:fixed;top:0;left:0;right:0;z-index:90;background:#7a1116;color:#fff;text-align:center;font-size:13px;font-weight:700;padding:9px 10px calc(9px + env(safe-area-inset-top));display:none}
 .offline-banner.on{display:block}
-/* Степпер +/- для веса и повторов */
-.stepper{display:flex;align-items:center;gap:5px}
-.stepper input{text-align:center;padding:8px 2px}
-.stepper button{width:32px;height:32px;flex:none;border-radius:9px;background:#1b1b1b;border:1px solid var(--line);color:#fff;font-weight:900;font-size:16px;line-height:1;padding:0;display:flex;align-items:center;justify-content:center}
-.stepper button:active{transform:scale(.9);background:#2a1012}
+/* Перетаскивание упражнений в шаблоне пальцем */
+.drag-handle{cursor:grab;touch-action:none;padding:4px 10px 4px 0;color:var(--muted);font-size:20px;line-height:1;user-select:none;flex:none}
+.template-ex-item.dragging{opacity:0.45}
 /* Подсказки для полей */
 .suggestions {
   position: absolute;
@@ -127,8 +125,6 @@
   .history-detail-grid { grid-template-columns: 1fr 1fr !important; }
   .set-fields .field input { font-size: 18px; padding: 10px 8px; }
   .set-block { padding: 14px; }
-  .stepper button { width: 42px; height: 42px; font-size: 20px; }
-  .stepper input { font-size: 18px; min-height: 42px; padding: 8px 2px; }
   .offline-banner { font-size: 14px; padding: 11px 10px calc(11px + env(safe-area-inset-top)); }
   .suggestions .suggestion-item { padding: 14px; font-size: 18px; }
 }
@@ -325,6 +321,15 @@ function userTemplates(){return DATA.templates.filter(t=>t['Активен']!==f
 function renderWorkout(){const templates=userTemplates();let html='';if(!currentWorkoutId){html+='<div class="card"><div class="title">Начать новую тренировку</div><div class="sub">Шаблоны только выбранного спортсмена.</div><div style="height:10px"></div><div class="form"><div class="field full"><label>Шаблон</label><select id="tpl">'+(templates.length?templates.map(t=>'<option value="'+esc(t.TemplateID)+'">'+esc(t['Название'])+'</option>').join(''):'<option value="">Сначала создай шаблон для этого спортсмена</option>')+'</select></div><button class="btn full" '+(templates.length?'':'disabled')+' onclick="startWorkout()">Начать тренировку</button></div></div>';}else{html+=workoutCard()}$('view').innerHTML=html}
 function startWorkout(){const template=$('tpl').value;if(!template){toast('Создай шаблон для этого спортсмена');return}invoke('startWorkout',[uid(),template],id=>{currentWorkoutId=id;toast('Тренировка началась');load()})}
 function allTimeBest(exerciseId){return Math.max.apply(null,DATA.sets.filter(s=>s.ExerciseID===exerciseId).filter(s=>{const w=DATA.workouts.find(x=>x.WorkoutID===s.WorkoutID);return w&&w.UserID===uid()&&w['Статус']==='Завершена'}).map(s=>Number(s['e1RM, кг'])||0).concat([0]))}
+// Рекомендуемые рабочие веса от лучшего e1RM: 85% — стандартная "силовая" зона,
+// вес на 15 повторений — через обратную формулу Эпли (w = 1RM / (1 + reps/30)).
+function recommendedWeights(best){
+  if (!best) return null;
+  return {
+    top: Math.round((best * 0.85) / 2.5) * 2.5,
+    fifteenRM: Math.round((best / (1 + 15/30)) / 2.5) * 2.5,
+  };
+}
 
 let workoutSets = {};
 
@@ -366,14 +371,16 @@ function workoutCard(){
     const ex=DATA.exercises.find(e=>e.ExerciseID===p.ExerciseID);
     const sets = workoutSets[p.ExerciseID] || [];
     const best=allTimeBest(p.ExerciseID);
-    html += '<div class="item" style="margin-top:12px"><div class="row"><div><b>'+esc(ex?ex['Название']:p.ExerciseID)+'</b><div class="sub">План: '+esc(p['Сеты'])+' × '+esc(p['Повторы'])+' · отдых '+esc(p['Отдых, сек'])+' сек</div><div class="sub" style="margin-top:3px">Лучший e1RM: '+best.toFixed(1)+' кг</div></div><span class="badge">'+esc(ex?ex['Мышца']:'')+'</span></div>';
+    const rec = recommendedWeights(best);
+    const recLine = rec ? '<div class="sub" style="margin-top:2px">Рекомендуемо: '+rec.top.toFixed(1)+' кг (85%) · '+rec.fifteenRM.toFixed(1)+' кг (на 15 повт.)</div>' : '';
+    html += '<div class="item" style="margin-top:12px"><div class="row"><div><b>'+esc(ex?ex['Название']:p.ExerciseID)+'</b><div class="sub">План: '+esc(p['Сеты'])+' × '+esc(p['Повторы'])+' · отдых '+esc(p['Отдых, сек'])+' сек</div><div class="sub" style="margin-top:3px">Лучший e1RM: '+best.toFixed(1)+' кг</div>'+recLine+'</div><span class="badge">'+esc(ex?ex['Мышца']:'')+'</span></div>';
     html += '<div class="sets-grid">';
     sets.forEach((s, idx) => {
       html += '<div class="set-block" data-temp="'+esc(s.tempId)+'">';
       html += '<div class="set-number">Сет '+s.setNo+'</div>';
       html += '<div class="set-fields">';
-      html += '<div class="field"><label>Вес, кг</label><div class="stepper"><button type="button" onclick="stepSet(\''+esc(p.ExerciseID)+'\','+idx+',\'weight\',-2.5)">−</button><input id="w_'+esc(s.tempId)+'" type="number" step="0.5" inputmode="decimal" value="'+esc(s.weight)+'" placeholder="0" onchange="updateSet(\''+esc(p.ExerciseID)+'\','+idx+',\'weight\',this.value)"><button type="button" onclick="stepSet(\''+esc(p.ExerciseID)+'\','+idx+',\'weight\',2.5)">+</button></div></div>';
-      html += '<div class="field"><label>Повторы</label><div class="stepper"><button type="button" onclick="stepSet(\''+esc(p.ExerciseID)+'\','+idx+',\'reps\',-1)">−</button><input id="r_'+esc(s.tempId)+'" type="number" inputmode="numeric" value="'+esc(s.reps)+'" placeholder="0" onchange="updateSet(\''+esc(p.ExerciseID)+'\','+idx+',\'reps\',this.value)"><button type="button" onclick="stepSet(\''+esc(p.ExerciseID)+'\','+idx+',\'reps\',1)">+</button></div></div>';
+      html += '<div class="field"><label>Вес, кг</label><input id="w_'+esc(s.tempId)+'" type="number" step="0.5" inputmode="decimal" value="'+esc(s.weight)+'" placeholder="0" onchange="updateSet(\''+esc(p.ExerciseID)+'\','+idx+',\'weight\',this.value)"></div>';
+      html += '<div class="field"><label>Повторы</label><input id="r_'+esc(s.tempId)+'" type="number" inputmode="numeric" value="'+esc(s.reps)+'" placeholder="0" onchange="updateSet(\''+esc(p.ExerciseID)+'\','+idx+',\'reps\',this.value)"></div>';
       html += '</div></div>';
     });
     html += '</div>';
@@ -392,19 +399,6 @@ function updateSet(exerciseId, idx, field, value){
     set[field] = value;
     saveDraft();
   }
-}
-
-// Плюс/минус без полной перерисовки экрана — быстрее и не сбивает прокрутку
-function stepSet(exerciseId, idx, field, delta){
-  const set = workoutSets[exerciseId] && workoutSets[exerciseId][idx];
-  if (!set) return;
-  let cur = parseFloat(set[field]) || 0;
-  cur = Math.max(0, Math.round((cur + delta) * 100) / 100);
-  set[field] = cur;
-  saveDraft();
-  const prefix = field === 'weight' ? 'w_' : (field === 'reps' ? 'r_' : null);
-  const el = prefix ? document.getElementById(prefix + set.tempId) : null;
-  if (el) el.value = cur;
 }
 
 function addSet(exerciseId){
@@ -693,7 +687,7 @@ function renderTemplateEditor(){
     const name = (DATA.exercises.find(e=>e.ExerciseID===x.ExerciseID)||{})['Название'] || x.ExerciseID;
     const upDisabled = idx === 0;
     const downDisabled = idx === ex.length - 1;
-    return '<div class="item row" data-id="'+esc(x.TemplateExerciseID)+'"><div><b>'+esc(name)+'</b><div class="sub">'+esc(x['Сеты'])+' × '+esc(x['Повторы'])+' · '+esc(x['Отдых, сек'])+' сек</div></div><div style="display:flex;gap:6px"><button class="btn small secondary" '+(upDisabled?'disabled style="opacity:0.3"':'')+' onclick="moveLocalExercise('+idx+',-1)">↑</button><button class="btn small secondary" '+(downDisabled?'disabled style="opacity:0.3"':'')+' onclick="moveLocalExercise('+idx+',1)">↓</button><button class="btn small red" onclick="removeLocalExercise(\''+esc(x.TemplateExerciseID)+'\')">✕</button></div></div>';
+    return '<div class="item row template-ex-item" data-id="'+esc(x.TemplateExerciseID)+'"><div style="display:flex;align-items:center;gap:8px;min-width:0"><span class="drag-handle" onpointerdown="startDrag(event, this)">⠿</span><div style="min-width:0"><b>'+esc(name)+'</b><div class="sub">'+esc(x['Сеты'])+' × '+esc(x['Повторы'])+' · '+esc(x['Отдых, сек'])+' сек</div></div></div><div style="display:flex;gap:6px;flex:none"><button class="btn small secondary" '+(upDisabled?'disabled style="opacity:0.3"':'')+' onclick="moveLocalExercise('+idx+',-1)">↑</button><button class="btn small secondary" '+(downDisabled?'disabled style="opacity:0.3"':'')+' onclick="moveLocalExercise('+idx+',1)">↓</button><button class="btn small red" onclick="removeLocalExercise(\''+esc(x.TemplateExerciseID)+'\')">✕</button></div></div>';
   }).join('') : '<div class="empty">Добавьте упражнения ниже</div>';
   const allEx = buildExercisePicker();
   const html = `
@@ -729,6 +723,50 @@ function renderTemplateEditor(){
     </div>
   `;
   $('view').innerHTML = html;
+}
+// Перетаскивание пальцем — в дополнение к стрелкам ↑/↓, не вместо них.
+let dragCtx = null;
+function startDrag(e, handle){
+  e.preventDefault();
+  const item = handle.closest('.template-ex-item');
+  if (!item) return;
+  const list = item.parentElement;
+  dragCtx = { item, list };
+  item.classList.add('dragging');
+  try { handle.setPointerCapture(e.pointerId); } catch (err) {}
+  document.addEventListener('pointermove', onDragMove);
+  document.addEventListener('pointerup', onDragEnd);
+  document.addEventListener('pointercancel', onDragEnd);
+}
+function onDragMove(e){
+  if (!dragCtx) return;
+  const { item, list } = dragCtx;
+  const y = e.clientY;
+  const siblings = Array.from(list.children).filter(el => el !== item);
+  let inserted = false;
+  for (const sib of siblings) {
+    const rect = sib.getBoundingClientRect();
+    if (y < rect.top + rect.height / 2) {
+      list.insertBefore(item, sib);
+      inserted = true;
+      break;
+    }
+  }
+  if (!inserted) list.appendChild(item);
+}
+function onDragEnd(){
+  if (!dragCtx) return;
+  const { item, list } = dragCtx;
+  item.classList.remove('dragging');
+  document.removeEventListener('pointermove', onDragMove);
+  document.removeEventListener('pointerup', onDragEnd);
+  document.removeEventListener('pointercancel', onDragEnd);
+  const newOrderIds = Array.from(list.children).map(el => el.dataset.id);
+  localExercises.sort((a, b) => newOrderIds.indexOf(a.TemplateExerciseID) - newOrderIds.indexOf(b.TemplateExerciseID));
+  localExercises.forEach((it, i) => { it['Порядок'] = i + 1; });
+  dragCtx = null;
+  persistTemplateOrder();
+  renderTemplateEditor();
 }
 function moveLocalExercise(index, direction){
   const newIndex = index + direction;
@@ -834,8 +872,8 @@ function renderProgress(){
 function progressChartCard(title, points){
   const vals = points.map(p=>p.value);
   const best = Math.max(...vals);
-  const recommended = Math.round((best * 0.85) / 2.5) * 2.5;
-  const recBlock = '<div class="row" style="margin-top:8px;padding-top:8px;border-top:1px solid var(--line)"><span class="sub">Рекомендуемый рабочий вес (85% от максимума)</span><b>'+recommended.toFixed(1)+' кг</b></div>';
+  const rec = recommendedWeights(best);
+  const recBlock = '<div class="row" style="margin-top:8px;padding-top:8px;border-top:1px solid var(--line)"><span class="sub">Рекомендуемый вес</span><b>'+rec.top.toFixed(1)+' кг (85%) · '+rec.fifteenRM.toFixed(1)+' кг (на 15 повт.)</b></div>';
 
   if (points.length < 2) {
     return '<div class="card"><div class="title" style="margin-bottom:4px">'+esc(title)+'</div><div class="sub">Пока только одна тренировка с этим упражнением.</div><div style="height:8px"></div><div class="metric" style="text-align:left"><div class="num">'+best.toFixed(1)+' кг</div><div class="label">лучший e1RM</div></div>'+recBlock+'</div>';
@@ -862,6 +900,18 @@ function progressChartCard(title, points){
     + '</svg>';
   return '<div class="card"><div class="title" style="margin-bottom:2px">'+esc(title)+'</div><div class="sub" style="margin-bottom:6px">'+vals[vals.length-1].toFixed(1)+' кг сейчас · было '+vals[0].toFixed(1)+' кг · максимум '+best.toFixed(1)+' кг</div><div class="chart" style="height:180px">'+svg+'</div><div class="legend"><span>'+esc(labels[0])+'</span><span>'+esc(labels[labels.length-1])+'</span></div>'+recBlock+'</div>';
 }
+// Автопрокрутка поля ввода над клавиатурой на телефоне — работает глобально для всех
+// текущих и будущих полей (вес, повторы, поля форм и т.д.), без переделки каждого отдельно.
+// Задержка нужна, т.к. клавиатура выезжает не мгновенно — scrollIntoView сразу после focus
+// сработал бы до того, как экран реально сжался под клавиатуру.
+document.addEventListener('focus', function(e){
+  const el = e.target;
+  if (!el || !el.matches || !el.matches('input, select, textarea')) return;
+  setTimeout(() => {
+    el.scrollIntoView({ block: 'center', behavior: 'smooth' });
+  }, 300);
+}, true);
+
 updateOnlineStatus();
 load();
 </script>
