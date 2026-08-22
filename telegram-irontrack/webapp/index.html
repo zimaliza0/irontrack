@@ -51,6 +51,22 @@
 <style>
 :root{--bg:#080808;--card:#111;--card2:#171717;--line:#2a2a2a;--text:#f7f7f7;--muted:#9a9a9a;--red:#e50914;--red2:#ff2b35;--green:#22c55e;--yellow:#f5b301;--radius:18px}
 *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}html,body{margin:0;padding:0;width:100%;min-height:100%;background:#080808;color:var(--text);font-family:-apple-system,BlinkMacSystemFont,"SF Pro Display","Segoe UI",sans-serif;-webkit-text-size-adjust:100%}body{overflow-x:hidden}button,input,select,textarea{font:inherit}button{cursor:pointer}.app{width:100%;max-width:1120px;margin:0 auto;min-height:100vh;padding:18px 14px 92px}.top{display:flex;justify-content:space-between;align-items:center;gap:12px;margin-bottom:12px}.brand{font-size:25px;font-weight:950;letter-spacing:-.8px}.brand span{color:var(--red)}.sub{font-size:13px;color:var(--muted);line-height:1.4}.userbox{min-width:190px;background:#111;border:1px solid var(--line);color:#fff;padding:11px 12px;border-radius:13px}.tabs{display:flex;gap:8px;overflow:auto;padding:4px 0 12px;position:sticky;top:0;z-index:20;background:rgba(8,8,8,.92);backdrop-filter:blur(14px)}.tab{border:1px solid var(--line);background:#111;color:var(--muted);padding:10px 13px;border-radius:12px;white-space:nowrap}.tab.active{background:var(--red);border-color:var(--red);color:white}.grid{display:grid;grid-template-columns:repeat(4,1fr);gap:12px}.grid2{display:grid;grid-template-columns:repeat(2,1fr);gap:12px}.card{background:linear-gradient(180deg,#141414,#101010);border:1px solid var(--line);border-radius:var(--radius);padding:16px;box-shadow:0 14px 38px rgba(0,0,0,.22)}.metric .num{font-size:30px;font-weight:950}.metric .label{color:var(--muted);font-size:12px;margin-top:4px}.title{font-size:18px;font-weight:850;margin:0 0 12px}.row{display:flex;align-items:center;justify-content:space-between;gap:10px}.stack{display:flex;flex-direction:column;gap:10px}.list{display:flex;flex-direction:column;gap:8px}.item{background:#0d0d0d;border:1px solid var(--line);border-radius:14px;padding:12px}.badge{font-size:11px;border-radius:999px;padding:5px 8px;background:#211010;color:#ff858a;border:1px solid #4a181b}.btn{border:0;background:var(--red);color:#fff;padding:11px 14px;border-radius:12px;font-weight:850;transition:transform .12s ease,background .12s ease}.btn:active{transform:scale(.98)}.btn.secondary{background:#1b1b1b;border:1px solid var(--line)}.btn.green{background:var(--green)}.btn.red{background:var(--red)}.btn.small{padding:8px 10px;font-size:12px}.btn.pr{background:linear-gradient(135deg,#e50914,#7b0006)}.form{display:grid;grid-template-columns:repeat(2,1fr);gap:10px}.field{display:flex;flex-direction:column;gap:6px}.field label{font-size:12px;color:var(--muted)}.full{grid-column:1/-1}input,select,textarea{width:100%;background:#090909;border:1px solid #303030;color:#fff;border-radius:12px;padding:11px 12px;outline:none;font-size:inherit}input:focus,select:focus,textarea:focus{border-color:#b51b22;box-shadow:0 0 0 2px rgba(229,9,20,.14)}textarea{min-height:80px;resize:vertical}.empty{padding:25px;text-align:center;color:var(--muted)}.divider{height:1px;background:var(--line);margin:14px 0}.bottom{position:fixed;z-index:50;bottom:0;left:0;right:0;background:rgba(8,8,8,.97);border-top:1px solid #292929;backdrop-filter:blur(18px);padding:8px 8px calc(8px + env(safe-area-inset-bottom))}.bottom .inner{max-width:1120px;margin:auto;display:grid;grid-template-columns:repeat(5,1fr);gap:6px}.bottom button{border:0;background:transparent;color:#8f8f8f;padding:8px 4px;border-radius:12px;min-height:48px}.bottom button.active{background:#241010;color:#fff}.navicon{display:block;font-size:18px;line-height:18px;margin-bottom:2px}.toast{position:fixed;z-index:100;left:50%;top:14px;transform:translateX(-50%);background:#1a0e0e;border:1px solid #5f1b20;border-radius:13px;padding:11px 14px;display:none;max-width:calc(100vw - 28px);box-shadow:0 10px 35px rgba(0,0,0,.35)}.loading{position:fixed;inset:0;background:rgba(0,0,0,.72);display:none;align-items:center;justify-content:center;z-index:80}.loading.on{display:flex}.loading .box{background:#141414;border:1px solid var(--line);border-radius:16px;padding:18px 22px}.error{border-color:#722127!important;background:#241011!important;color:#ffd4d6}.chart{height:280px}.legend{display:flex;justify-content:space-between;color:var(--muted);font-size:12px;margin-top:8px}.timer{font-variant-numeric:tabular-nums;font-size:34px;font-weight:950;letter-spacing:1px}.history-card{cursor:pointer}.history-card:active{transform:scale(.99)}.pillrow{display:flex;gap:8px;overflow:auto;padding-bottom:2px}.pill{padding:7px 10px;border:1px solid var(--line);border-radius:999px;color:var(--muted);white-space:nowrap;background:#101010}.pill.active{color:#fff;background:#351012;border-color:#6d2026}.template-owner{font-size:11px;color:#777}.sticky-actions{position:sticky;bottom:96px;z-index:15}
+.pill{cursor:pointer}
+.cal-header{margin-bottom:2px}
+.cal-range{text-transform:capitalize;font-size:15px}
+.cal-dow{display:grid;grid-template-columns:repeat(7,1fr);gap:4px;margin-bottom:4px;text-align:center;color:var(--muted);font-size:11px}
+.cal-grid{display:grid;grid-template-columns:repeat(7,1fr);gap:4px}
+.cal-cell{position:relative;aspect-ratio:1/1;display:flex;align-items:center;justify-content:center;border-radius:10px;background:#0d0d0d;border:1px solid var(--line);cursor:pointer;font-size:13px}
+.cal-cell.dim{opacity:0.35}
+.cal-cell.today{border-color:#6d2026}
+.cal-cell.selected{background:var(--red);border-color:var(--red);color:#fff}
+.cal-daynum{font-weight:700}
+.cal-dot{position:absolute;bottom:5px;width:6px;height:6px;border-radius:50%;background:var(--muted)}
+.cal-dot.dot-done{background:var(--green)}
+.cal-dot.dot-active{background:#ffb020}
+.cal-dot.dot-planned{background:#5b8cff}
+.cal-day-panel{margin-top:14px;padding-top:12px;border-top:1px solid var(--line)}
+.cal-grid-week .cal-cell{aspect-ratio:auto;padding:10px 0}
 /* Блоки подходов */
 .sets-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:8px}
 .set-block{background:#141414;border:1px solid #2a2a2a;border-radius:12px;padding:10px 12px;display:flex;flex-direction:column;gap:6px}
@@ -200,6 +216,8 @@ const API_ROUTES = {
   deleteTemplateExercise: (id) => ({ method: 'DELETE', url: '/api/template-exercises/' + encodeURIComponent(id) }),
   updateTemplateOrder: (templateId, orderData) => ({ method: 'PUT', url: '/api/templates/' + encodeURIComponent(templateId) + '/order', body: { orderData } }),
   startWorkout: (userId, templateId) => ({ method: 'POST', url: '/api/workouts/start', body: { userId, templateId } }),
+  planWorkout: (userId, templateId, date) => ({ method: 'POST', url: '/api/workouts/plan', body: { userId, templateId, date } }),
+  startPlannedWorkout: (workoutId) => ({ method: 'POST', url: '/api/workouts/' + encodeURIComponent(workoutId) + '/start-planned' }),
   saveAllSets: (workoutId, setsArray) => ({ method: 'POST', url: '/api/workouts/' + encodeURIComponent(workoutId) + '/sets', body: { sets: setsArray } }),
   finishWorkout: (workoutId, note, durationSeconds) => ({ method: 'POST', url: '/api/workouts/' + encodeURIComponent(workoutId) + '/finish', body: { note, durationSeconds } }),
   deleteWorkout: (workoutId) => ({ method: 'DELETE', url: '/api/workouts/' + encodeURIComponent(workoutId) }),
@@ -249,6 +267,7 @@ window.google = { script: { run: makeRunProxy(), host: { close: function(){ if (
 <script>
 const ua=navigator.userAgent||'';const mobileUA=/iPhone|iPad|iPod|Android|Mobile/i.test(ua);if(mobileUA||window.matchMedia('(hover:none) and (pointer:coarse)').matches||window.innerWidth<=760)document.documentElement.classList.add('is-mobile');
 let DATA={users:[],exercises:[],templates:[],templateEx:[],workouts:[],sets:[]};let activeView='home';let currentWorkoutId=null;let activeHistoryWorkoutId=null;let timerHandle=null;
+let calScale='week';let calAnchor=new Date();let calSelectedDay=null;let planPickerOpen=false;
 const $=id=>document.getElementById(id);function busy(on){$('loading').classList.toggle('on',on)}function toast(text){const x=$('toast');x.textContent=text;x.style.display='block';clearTimeout(window.__toast);window.__toast=setTimeout(()=>x.style.display='none',2500)}function esc(v){return String(v==null?'':v).replace(/[&<>'"]/g,s=>({'&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#39;','"':'&quot;'}[s]))}function uid(){return $('userSelect').value}function date(v){if(!v)return '—';const d=new Date(v);return isNaN(d)?String(v):d.toLocaleDateString('ru-RU')}function time(v){if(!v)return '—';const d=new Date(v);return isNaN(d)?String(v):d.toLocaleTimeString('ru-RU',{hour:'2-digit',minute:'2-digit'})}
 
 // --- Кэш данных на случай обрыва связи ---
@@ -316,11 +335,178 @@ function renderNoUsers(){$('view').innerHTML='<div class="card"><div class="titl
 function userForm(){return '<div class="form"><div class="field full"><label>Имя</label><input id="un" placeholder="Например, Михаил"></div><div class="field"><label>Пол</label><select id="ug"><option value="">—</option><option>М</option><option>Ж</option></select></div><div class="field"><label>Дата рождения</label><input id="ub" type="date"></div><div class="field"><label>Рост, см</label><input id="uh" type="number" inputmode="numeric"></div><div class="field"><label>Вес, кг</label><input id="uw" type="number" step="0.1" inputmode="decimal"></div><button class="btn full" onclick="addUser()">Добавить спортсмена</button></div>'}
 function addUser(){invoke('addUser',[{name:$('un').value,gender:$('ug').value,birth:$('ub').value,height:$('uh').value,weight:$('uw').value}],()=>{toast('Спортсмен добавлен');load()})}
 function metric(n,l){return '<div class="card metric"><div class="num">'+esc(n)+'</div><div class="label">'+esc(l)+'</div></div>'}
-function renderHome(){const u=uid(),ws=DATA.workouts.filter(w=>w.UserID===u).sort((a,b)=>new Date(a['Дата'])-new Date(b['Дата'])),sets=DATA.sets.filter(s=>ws.some(w=>w.WorkoutID===s.WorkoutID)),last=ws.slice(-5).reverse(),active=ws.find(w=>w['Статус']==='В процессе'),templates=userTemplates();$('view').innerHTML='<div class="grid">'+metric(DATA.exercises.length,'Упражнений')+metric(templates.length,'Шаблонов')+metric(ws.length,'Тренировок')+metric(sets.length,'Подходов')+'</div><div style="height:12px"></div>'+(active?'<div class="card workout-top"><div class="row"><div><div class="title">Тренировка идёт</div><div class="sub">'+esc(active['Название'])+'</div></div><div style="text-align:right"><div class="timer" id="homeWorkoutTimer">'+fmtDuration(elapsedSeconds(active))+'</div><div class="sub">время</div></div></div><div style="height:10px"></div><button class="btn green" style="width:100%" onclick="nav(\'workout\')">Продолжить тренировку</button></div><div style="height:12px"></div>':'')+'<div class="grid2"><div class="card"><div class="title">Быстрый старт</div><div class="sub">Твои шаблоны и прошлые результаты будут под рукой.</div><div style="height:12px"></div><button class="btn" style="width:100%" onclick="nav(\'workout\')">'+(active?'Открыть тренировку':'Начать тренировку')+'</button></div><div class="card"><div class="title">Последняя тренировка</div>'+(last[0]?'<div class="history-card" onclick="openWorkout(\''+esc(last[0].WorkoutID)+'\')"><b>'+esc(last[0]['Название'])+'</b><div class="sub">'+date(last[0]['Дата'])+' · '+esc(last[0]['Статус'])+'</div><div style="margin-top:7px"><span class="badge">'+(last[0]['Длительность, мин']?esc(last[0]['Длительность, мин'])+' мин':'—')+'</span></div></div>':'<div class="empty">Пока тренировок нет</div>')+'</div></div><div style="height:12px"></div><div class="card"><div class="row"><div class="title">Последние тренировки</div><button class="btn small secondary" onclick="nav(\'history\')">Вся история</button></div><div class="list">'+(last.length?last.map(w=>'<div class="item row history-card" onclick="openWorkout(\''+esc(w.WorkoutID)+'\')"><div><b>'+esc(w['Название'])+'</b><div class="sub">'+date(w['Дата'])+' · '+esc(w['Статус'])+'</div></div><span class="badge">'+(w['Длительность, мин']?esc(w['Длительность, мин'])+' мин':'—')+'</span></div>').join(''):'<div class="empty">История появится после первой тренировки</div>')+'</div></div>'}
+// ===================== Календарь на главной =====================
+function dayKey(v){
+  const d = new Date(v);
+  if (isNaN(d)) return '';
+  return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');
+}
+function startOfWeek(d){
+  const nd = new Date(d);
+  const dow = (nd.getDay()+6)%7; // Пн=0
+  nd.setDate(nd.getDate()-dow);
+  nd.setHours(0,0,0,0);
+  return nd;
+}
+function workoutsByDay(){
+  const u = uid();
+  const map = {};
+  DATA.workouts.filter(w=>w.UserID===u).forEach(w=>{
+    const k = dayKey(w['Дата']);
+    if (!k) return;
+    (map[k] = map[k] || []).push(w);
+  });
+  return map;
+}
+function calShift(delta){
+  const d = new Date(calAnchor);
+  if (calScale === 'week') d.setDate(d.getDate() + delta*7);
+  else d.setMonth(d.getMonth() + delta);
+  calAnchor = d;
+  renderHome();
+}
+function calSetScale(scale){
+  calScale = scale;
+  renderHome();
+}
+function calSelectDay(key){
+  calSelectedDay = key;
+  planPickerOpen = false;
+  renderHome();
+}
+function buildCalendar(){
+  if (!calSelectedDay) calSelectedDay = dayKey(new Date());
+  const byDay = workoutsByDay();
+  const todayKey = dayKey(new Date());
+  const dowLabels = ['Пн','Вт','Ср','Чт','Пт','Сб','Вс'];
+  let cells = [];
+  let rangeLabel = '';
+  if (calScale === 'week') {
+    const start = startOfWeek(calAnchor);
+    const end = new Date(start); end.setDate(end.getDate()+6);
+    rangeLabel = start.toLocaleDateString('ru-RU',{day:'numeric',month:'short'}) + ' – ' + end.toLocaleDateString('ru-RU',{day:'numeric',month:'short'});
+    for (let i=0;i<7;i++){ const d=new Date(start); d.setDate(d.getDate()+i); cells.push(d); }
+  } else {
+    const first = new Date(calAnchor.getFullYear(), calAnchor.getMonth(), 1);
+    const start = startOfWeek(first);
+    rangeLabel = calAnchor.toLocaleDateString('ru-RU',{month:'long',year:'numeric'});
+    for (let i=0;i<42;i++){ const d=new Date(start); d.setDate(d.getDate()+i); cells.push(d); }
+  }
+  let html = '<div class="card cal-card">';
+  html += '<div class="row cal-header"><button class="btn small secondary" onclick="calShift(-1)">‹</button><b class="cal-range">'+esc(rangeLabel)+'</b><button class="btn small secondary" onclick="calShift(1)">›</button></div>';
+  html += '<div class="pillrow" style="margin:10px 0"><span class="pill '+(calScale==='week'?'active':'')+'" onclick="calSetScale(\'week\')">Неделя</span><span class="pill '+(calScale==='month'?'active':'')+'" onclick="calSetScale(\'month\')">Месяц</span></div>';
+  html += '<div class="cal-dow">'+dowLabels.map(l=>'<span>'+l+'</span>').join('')+'</div>';
+  html += '<div class="cal-grid cal-grid-'+calScale+'">';
+  cells.forEach(d=>{
+    const key = dayKey(d);
+    const inMonth = calScale==='week' || d.getMonth()===calAnchor.getMonth();
+    const dayWorkouts = byDay[key] || [];
+    let dotClass = '';
+    if (dayWorkouts.some(w=>w['Статус']==='В процессе')) dotClass='dot-active';
+    else if (dayWorkouts.some(w=>w['Статус']==='Завершена')) dotClass='dot-done';
+    else if (dayWorkouts.some(w=>w['Статус']==='Запланирована')) dotClass='dot-planned';
+    html += '<div class="cal-cell'+(key===calSelectedDay?' selected':'')+(key===todayKey?' today':'')+(!inMonth?' dim':'')+'" onclick="calSelectDay(\''+key+'\')"><span class="cal-daynum">'+d.getDate()+'</span>'+(dotClass?'<span class="cal-dot '+dotClass+'"></span>':'')+'</div>';
+  });
+  html += '</div>';
+  html += renderSelectedDayPanel(byDay[calSelectedDay] || []);
+  html += '</div>';
+  return html;
+}
+function renderSelectedDayPanel(dayWorkouts){
+  const d = new Date(calSelectedDay+'T12:00:00');
+  const label = d.toLocaleDateString('ru-RU',{weekday:'long',day:'numeric',month:'long'});
+  let html = '<div class="cal-day-panel"><div class="row" style="margin:4px 0 8px"><b style="text-transform:capitalize">'+esc(label)+'</b><button class="btn small secondary" onclick="togglePlanPicker()">'+(planPickerOpen?'Отмена':'+ Запланировать')+'</button></div>';
+  if (planPickerOpen) html += planPickerForm();
+  if (!dayWorkouts.length && !planPickerOpen) {
+    html += '<div class="empty">На этот день ничего нет.</div>';
+  } else {
+    html += dayWorkouts.map(w=>{
+      const statusLabel = {'Завершена':'Завершена','В процессе':'Идёт сейчас','Запланирована':'Запланирована'}[w['Статус']] || w['Статус'];
+      let actionBtn;
+      if (w['Статус']==='Запланирована') {
+        actionBtn = '<div style="display:flex;gap:6px;flex:none"><button class="btn small" onclick="beginPlannedWorkout(\''+esc(w.WorkoutID)+'\')">Начать</button><button class="btn small red" onclick="cancelPlannedWorkout(\''+esc(w.WorkoutID)+'\')">✕</button></div>';
+      } else {
+        actionBtn = '<button class="btn small secondary" onclick="openWorkout(\''+esc(w.WorkoutID)+'\')">Открыть</button>';
+      }
+      return '<div class="item row"><div><b>'+esc(w['Название'])+'</b><div class="sub">'+esc(statusLabel)+(w['Длительность, мин']?' · '+esc(w['Длительность, мин'])+' мин':'')+'</div></div>'+actionBtn+'</div>';
+    }).join('');
+  }
+  html += '</div>';
+  return html;
+}
+function togglePlanPicker(){
+  planPickerOpen = !planPickerOpen;
+  renderHome();
+}
+function planPickerForm(){
+  const templates = userTemplates();
+  if (!templates.length) return '<div class="empty">У этого спортсмена пока нет шаблонов — сначала создайте его в разделе «База».</div>';
+  return '<div class="item" style="margin-bottom:10px"><div class="form"><div class="field full"><label>Шаблон</label><select id="planTemplateSelect">'+templates.map(t=>'<option value="'+esc(t.TemplateID)+'">'+esc(t['Название'])+'</option>').join('')+'</select></div></div><div style="height:8px"></div><button class="btn" style="width:100%" onclick="submitPlanWorkout()">Запланировать на этот день</button></div>';
+}
+function submitPlanWorkout(){
+  const templateId = $('planTemplateSelect') && $('planTemplateSelect').value;
+  if (!templateId) { toast('Нет доступных шаблонов'); return; }
+  invoke('planWorkout', [uid(), templateId, calSelectedDay], () => {
+    toast('Тренировка запланирована');
+    planPickerOpen = false;
+    load();
+  });
+}
+function beginPlannedWorkout(workoutId){
+  invoke('startPlannedWorkout', [workoutId], () => {
+    activeView = 'workout';
+    activeHistoryWorkoutId = null;
+    workoutSets = {};
+    document.querySelectorAll('[data-view]').forEach(b=>b.classList.toggle('active', b.dataset.view==='workout'));
+    updateTelegramBackButton();
+    load();
+  });
+}
+function cancelPlannedWorkout(workoutId){
+  if (!confirm('Отменить запланированную тренировку?')) return;
+  invoke('deleteWorkout', [workoutId], () => {
+    toast('План отменён');
+    load();
+  });
+}
+// ===================== /Календарь =====================
+
+function renderHome(){
+  const u = uid();
+  const ws = DATA.workouts.filter(w=>w.UserID===u && w['Статус']!=='Запланирована').sort((a,b)=>new Date(a['Дата'])-new Date(b['Дата']));
+  const sets = DATA.sets.filter(s=>ws.some(w=>w.WorkoutID===s.WorkoutID));
+  const last = ws.slice(-5).reverse();
+  const active = ws.find(w=>w['Статус']==='В процессе');
+  const templates = userTemplates();
+  let html = '<div class="grid">'+metric(DATA.exercises.length,'Упражнений')+metric(templates.length,'Шаблонов')+metric(ws.length,'Тренировок')+metric(sets.length,'Подходов')+'</div><div style="height:12px"></div>';
+  if (active) {
+    html += '<div class="card workout-top"><div class="row"><div><div class="title">Тренировка идёт</div><div class="sub">'+esc(active['Название'])+'</div></div><div style="text-align:right"><div class="timer" id="homeWorkoutTimer">'+fmtDuration(elapsedSeconds(active))+'</div><div class="sub">время</div></div></div><div style="height:10px"></div><button class="btn green" style="width:100%" onclick="nav(\'workout\')">Продолжить тренировку</button></div><div style="height:12px"></div>';
+  }
+  html += buildCalendar();
+  html += '<div style="height:12px"></div>';
+  html += '<div class="grid2"><div class="card"><div class="title">Быстрый старт</div><div class="sub">Твои шаблоны и прошлые результаты будут под рукой.</div><div style="height:12px"></div><button class="btn" style="width:100%" onclick="nav(\'workout\')">'+(active?'Открыть тренировку':'Начать тренировку')+'</button></div><div class="card"><div class="title">Последняя тренировка</div>'+(last[0]?'<div class="history-card" onclick="openWorkout(\''+esc(last[0].WorkoutID)+'\')"><b>'+esc(last[0]['Название'])+'</b><div class="sub">'+date(last[0]['Дата'])+' · '+esc(last[0]['Статус'])+'</div><div style="margin-top:7px"><span class="badge">'+(last[0]['Длительность, мин']?esc(last[0]['Длительность, мин'])+' мин':'—')+'</span></div></div>':'<div class="empty">Пока тренировок нет</div>')+'</div></div>';
+  html += '<div style="height:12px"></div><div class="card"><div class="row"><div class="title">Последние тренировки</div><button class="btn small secondary" onclick="nav(\'history\')">Вся история</button></div><div class="list">'+(last.length?last.map(w=>'<div class="item row history-card" onclick="openWorkout(\''+esc(w.WorkoutID)+'\')"><div><b>'+esc(w['Название'])+'</b><div class="sub">'+date(w['Дата'])+' · '+esc(w['Статус'])+'</div></div><span class="badge">'+(w['Длительность, мин']?esc(w['Длительность, мин'])+' мин':'—')+'</span></div>').join(''):'<div class="empty">История появится после первой тренировки</div>')+'</div></div>';
+  $('view').innerHTML = html;
+}
 function userTemplates(){return DATA.templates.filter(t=>t['Активен']!==false&&String(t['Владелец UserID']||'')===String(uid()))}
 function renderWorkout(){const templates=userTemplates();let html='';if(!currentWorkoutId){html+='<div class="card"><div class="title">Начать новую тренировку</div><div class="sub">Шаблоны только выбранного спортсмена.</div><div style="height:10px"></div><div class="form"><div class="field full"><label>Шаблон</label><select id="tpl">'+(templates.length?templates.map(t=>'<option value="'+esc(t.TemplateID)+'">'+esc(t['Название'])+'</option>').join(''):'<option value="">Сначала создай шаблон для этого спортсмена</option>')+'</select></div><button class="btn full" '+(templates.length?'':'disabled')+' onclick="startWorkout()">Начать тренировку</button></div></div>';}else{html+=workoutCard()}$('view').innerHTML=html}
 function startWorkout(){const template=$('tpl').value;if(!template){toast('Создай шаблон для этого спортсмена');return}invoke('startWorkout',[uid(),template],id=>{currentWorkoutId=id;toast('Тренировка началась');load()})}
 function allTimeBest(exerciseId){return Math.max.apply(null,DATA.sets.filter(s=>s.ExerciseID===exerciseId).filter(s=>{const w=DATA.workouts.find(x=>x.WorkoutID===s.WorkoutID);return w&&w.UserID===uid()&&w['Статус']==='Завершена'}).map(s=>Number(s['e1RM, кг'])||0).concat([0]))}
+// Лучший реально выполненный подход (по e1RM) — вес и повторы, чтобы подставить их как
+// стартовое значение при начале новой тренировки с этим упражнением.
+function bestSetForExercise(exerciseId){
+  const u = uid();
+  let best = null;
+  DATA.sets.filter(s=>s.ExerciseID===exerciseId).forEach(s=>{
+    const w = DATA.workouts.find(x=>x.WorkoutID===s.WorkoutID);
+    if (!w || w.UserID!==u || w['Статус']!=='Завершена') return;
+    const e1 = Number(s['e1RM, кг']) || 0;
+    if (!best || e1 > best.e1rm) {
+      best = { weight: Number(s['Вес, кг'])||0, reps: Number(s['Повторы'])||0, e1rm: e1 };
+    }
+  });
+  return best;
+}
 // Рекомендуемые рабочие веса от лучшего e1RM.
 // Раньше для веса на 15 повторов инвертировалась только формула Эпли — для лёгких
 // изолирующих упражнений (небольшие веса, где шаг округления 2.5кг относительно велик)
@@ -367,12 +553,13 @@ function workoutCard(){
     plan.forEach(p => {
       if (workoutSets[p.ExerciseID]) return;
       const setsCount = Number(p['Сеты']) || 0;
+      const best = bestSetForExercise(p.ExerciseID);
       const sets = [];
       for (let i=1; i<=setsCount; i++) {
         sets.push({
           setNo: i,
-          weight: '',
-          reps: '',
+          weight: best ? best.weight : '',
+          reps: best ? best.reps : '',
           rpe: '',
           tempId: 'set_'+p.ExerciseID+'_'+i+'_'+Date.now()+'_'+Math.random()
         });
@@ -503,7 +690,7 @@ function finishWorkout(){
     .saveAllSets(currentWorkoutId, setsToSave);
 }
 
-function renderHistory(){const u=uid(),ws=DATA.workouts.filter(w=>w.UserID===u).sort((a,b)=>new Date(b['Дата'])-new Date(a['Дата']));if(activeHistoryWorkoutId){renderWorkoutDetails(activeHistoryWorkoutId);return}$('view').innerHTML='<div class="card"><div class="row"><div><div class="title">История тренировок</div><div class="sub">Нажми на тренировку, чтобы посмотреть все подходы и длительность.</div></div><span class="badge">'+ws.length+' шт.</span></div><div style="height:12px"></div><div class="list">'+(ws.length?ws.map(historyItem).join(''):'<div class="empty">У этого спортсмена ещё нет тренировок.</div>')+'</div></div>'}
+function renderHistory(){const u=uid(),ws=DATA.workouts.filter(w=>w.UserID===u&&w['Статус']!=='Запланирована').sort((a,b)=>new Date(b['Дата'])-new Date(a['Дата']));if(activeHistoryWorkoutId){renderWorkoutDetails(activeHistoryWorkoutId);return}$('view').innerHTML='<div class="card"><div class="row"><div><div class="title">История тренировок</div><div class="sub">Нажми на тренировку, чтобы посмотреть все подходы и длительность.</div></div><span class="badge">'+ws.length+' шт.</span></div><div style="height:12px"></div><div class="list">'+(ws.length?ws.map(historyItem).join(''):'<div class="empty">У этого спортсмена ещё нет тренировок.</div>')+'</div></div>'}
 function historyItem(w){const setCount=DATA.sets.filter(s=>s.WorkoutID===w.WorkoutID).length;return '<div class="item history-card" onclick="openWorkout(\''+esc(w.WorkoutID)+'\')"><div class="row"><div><b>'+esc(w['Название'])+'</b><div class="sub">'+date(w['Дата'])+' · '+time(w['Дата'])+'</div></div><span class="badge">'+esc(w['Статус'])+'</span></div><div class="row" style="margin-top:10px"><span class="sub">'+setCount+' подходов</span><span class="sub">'+(w['Длительность, мин']?esc(w['Длительность, мин'])+' мин':'в процессе')+'</span></div></div>'}
 function openWorkout(id){activeHistoryWorkoutId=id;activeView='history';render();updateTelegramBackButton()}
 function renderWorkoutDetails(workoutId){
@@ -708,9 +895,7 @@ function renderTemplateEditor(){
   const ex = localExercises;
   const exList = ex.length ? ex.map((x, idx) => {
     const name = (DATA.exercises.find(e=>e.ExerciseID===x.ExerciseID)||{})['Название'] || x.ExerciseID;
-    const upDisabled = idx === 0;
-    const downDisabled = idx === ex.length - 1;
-    return '<div class="item row template-ex-item" data-id="'+esc(x.TemplateExerciseID)+'"><div style="display:flex;align-items:center;gap:8px;min-width:0"><span class="drag-handle" onpointerdown="startDrag(event, this)">⠿</span><div style="min-width:0"><b>'+esc(name)+'</b><div class="sub">'+esc(x['Сеты'])+' × '+esc(x['Повторы'])+' · '+esc(x['Отдых, сек'])+' сек</div></div></div><div style="display:flex;gap:6px;flex:none"><button class="btn small secondary" '+(upDisabled?'disabled style="opacity:0.3"':'')+' onclick="moveLocalExercise('+idx+',-1)">↑</button><button class="btn small secondary" '+(downDisabled?'disabled style="opacity:0.3"':'')+' onclick="moveLocalExercise('+idx+',1)">↓</button><button class="btn small red" onclick="removeLocalExercise(\''+esc(x.TemplateExerciseID)+'\')">✕</button></div></div>';
+    return '<div class="item row template-ex-item" data-id="'+esc(x.TemplateExerciseID)+'"><div style="display:flex;align-items:center;gap:8px;min-width:0"><button class="btn small red" onclick="removeLocalExercise(\''+esc(x.TemplateExerciseID)+'\')">✕</button><div style="min-width:0"><b>'+esc(name)+'</b><div class="sub">'+esc(x['Сеты'])+' × '+esc(x['Повторы'])+' · '+esc(x['Отдых, сек'])+' сек</div></div></div><span class="drag-handle" onpointerdown="startDrag(event, this)">⠿</span></div>';
   }).join('') : '<div class="empty">Добавьте упражнения ниже</div>';
   const allEx = buildExercisePicker();
   const html = `
@@ -790,16 +975,6 @@ function onDragEnd(){
   dragCtx = null;
   persistTemplateOrder();
   renderTemplateEditor();
-}
-function moveLocalExercise(index, direction){
-  const newIndex = index + direction;
-  if (newIndex < 0 || newIndex >= localExercises.length) return;
-  const temp = localExercises[index];
-  localExercises[index] = localExercises[newIndex];
-  localExercises[newIndex] = temp;
-  localExercises.forEach((item, i) => item['Порядок'] = i + 1);
-  renderTemplateEditor();
-  persistTemplateOrder();
 }
 function persistTemplateOrder(){
   if (!currentTemplateId || !localExercises.length) return;

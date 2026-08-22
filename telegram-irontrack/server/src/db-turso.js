@@ -242,6 +242,37 @@ async function startWorkout(userId, templateId) {
   return wId;
 }
 
+// Планирование тренировки на будущую (или любую) дату по шаблону — отдельная запись со
+// статусом "Запланирована", которая позже либо "запускается" (превращается в обычную
+// активную тренировку), либо отменяется (обычным удалением).
+async function planWorkout(userId, templateId, dateStr) {
+  if (!userId || !templateId || !dateStr) throw new Error('Не хватает данных для планирования.');
+  const templates = await all(
+    'SELECT * FROM templates WHERE "TemplateID" = ? AND "Активен" = 1 AND "Владелец UserID" = ?',
+    [templateId, userId]
+  );
+  if (!templates.length) throw new Error('Этот шаблон не принадлежит выбранному спортсмену.');
+  const isoDate = String(dateStr).length <= 10 ? dateStr + 'T12:00:00.000Z' : dateStr;
+  const wId = id('W');
+  await run(
+    `INSERT INTO workouts ("WorkoutID","UserID","TemplateID","Дата","Название","Длительность, мин","Заметки","Статус") VALUES (?,?,?,?,?,?,?,?)`,
+    [wId, userId, templateId, isoDate, templates[0]['Название'], null, '', 'Запланирована']
+  );
+  return wId;
+}
+
+async function startPlannedWorkout(workoutId) {
+  if (!workoutId) throw new Error('Не указана тренировка.');
+  const rows = await all('SELECT * FROM workouts WHERE "WorkoutID" = ?', [workoutId]);
+  if (!rows.length) throw new Error('Тренировка не найдена.');
+  const w = rows[0];
+  if (w['Статус'] !== 'Запланирована') throw new Error('Эта тренировка уже не в статусе "Запланирована".');
+  const active = await all('SELECT "WorkoutID" FROM workouts WHERE "UserID" = ? AND "Статус" = ?', [w.UserID, 'В процессе']);
+  if (active.length) throw new Error('У этого спортсмена уже есть незавершённая тренировка — сначала заверши её.');
+  await run('UPDATE workouts SET "Статус" = ?, "Дата" = ? WHERE "WorkoutID" = ?', ['В процессе', now(), workoutId]);
+  return workoutId;
+}
+
 async function saveAllSets(workoutId, setsArray) {
   if (!workoutId || !setsArray || !setsArray.length) throw new Error('Нет данных для сохранения');
   const workouts = await all('SELECT * FROM workouts WHERE "WorkoutID" = ?', [workoutId]);
@@ -376,6 +407,8 @@ module.exports = {
   deleteTemplateExercise,
   updateTemplateOrder,
   startWorkout,
+  planWorkout,
+  startPlannedWorkout,
   saveAllSets,
   finishWorkout,
   deleteWorkout,

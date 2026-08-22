@@ -270,6 +270,45 @@ async function startWorkout(userId, templateId) {
   return wId;
 }
 
+async function planWorkout(userId, templateId, dateStr) {
+  await ensureSchema();
+  if (!userId || !templateId || !dateStr) throw new Error('Не хватает данных для планирования.');
+  const templates = await rows(CFG.TEMPLATES);
+  const template = templates.find(
+    (x) => x.TemplateID === templateId && x['Активен'] !== false && x['Владелец UserID'] === userId
+  );
+  if (!template) throw new Error('Этот шаблон не принадлежит выбранному спортсмену.');
+  const isoDate = String(dateStr).length <= 10 ? dateStr + 'T12:00:00.000Z' : dateStr;
+  const wId = id('W');
+  await appendObject(CFG.WORKOUTS, {
+    WorkoutID: wId,
+    UserID: userId,
+    TemplateID: templateId,
+    Дата: isoDate,
+    Название: template['Название'],
+    'Длительность, мин': '',
+    Заметки: '',
+    Статус: 'Запланирована',
+  });
+  return wId;
+}
+
+async function startPlannedWorkout(workoutId) {
+  if (!workoutId) throw new Error('Не указана тренировка.');
+  const sh = await sheet(CFG.WORKOUTS);
+  const gsRows = await sh.getRows();
+  const row = gsRows.find((r) => String(r.get('WorkoutID')) === String(workoutId));
+  if (!row) throw new Error('Тренировка не найдена.');
+  if (row.get('Статус') !== 'Запланирована') throw new Error('Эта тренировка уже не в статусе "Запланирована".');
+  const userId = row.get('UserID');
+  const active = gsRows.find((r) => String(r.get('UserID')) === String(userId) && r.get('Статус') === 'В процессе');
+  if (active) throw new Error('У этого спортсмена уже есть незавершённая тренировка — сначала заверши её.');
+  row.set('Статус', 'В процессе');
+  row.set('Дата', now().toISOString());
+  await row.save();
+  return workoutId;
+}
+
 async function saveAllSets(workoutId, setsArray) {
   await ensureSchema();
   if (!workoutId || !setsArray || !setsArray.length) throw new Error('Нет данных для сохранения');
@@ -411,6 +450,8 @@ module.exports = {
   deleteTemplateExercise,
   updateTemplateOrder,
   startWorkout,
+  planWorkout,
+  startPlannedWorkout,
   saveAllSets,
   finishWorkout,
   deleteWorkout,

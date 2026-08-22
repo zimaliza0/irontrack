@@ -54,6 +54,8 @@ app.delete('/api/template-exercises/:id', h((req) => sheets.deleteTemplateExerci
 app.put('/api/templates/:templateId/order', h((req) => sheets.updateTemplateOrder(req.params.templateId, req.body.orderData || [])));
 
 app.post('/api/workouts/start', h((req) => sheets.startWorkout(req.body.userId, req.body.templateId)));
+app.post('/api/workouts/plan', h((req) => sheets.planWorkout(req.body.userId, req.body.templateId, req.body.date)));
+app.post('/api/workouts/:id/start-planned', h((req) => sheets.startPlannedWorkout(req.params.id)));
 app.post('/api/workouts/:id/sets', h((req) => sheets.saveAllSets(req.params.id, req.body.sets || [])));
 app.post('/api/workouts/:id/finish', h((req) => sheets.finishWorkout(req.params.id, req.body.note, req.body.durationSeconds)));
 app.delete('/api/workouts/:id', h((req) => sheets.deleteWorkout(req.params.id)));

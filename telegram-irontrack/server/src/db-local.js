@@ -202,6 +202,43 @@ async function startWorkout(userId, templateId) {
   return wId;
 }
 
+async function planWorkout(userId, templateId, dateStr) {
+  if (!userId || !templateId || !dateStr) throw new Error('Не хватает данных для планирования.');
+  const db = loadDB();
+  const template = db[CFG.TEMPLATES].find(
+    (x) => x.TemplateID === templateId && x['Активен'] !== false && x['Владелец UserID'] === userId
+  );
+  if (!template) throw new Error('Этот шаблон не принадлежит выбранному спортсмену.');
+  const isoDate = String(dateStr).length <= 10 ? dateStr + 'T12:00:00.000Z' : dateStr;
+  const wId = id('W');
+  db[CFG.WORKOUTS].push({
+    WorkoutID: wId,
+    UserID: userId,
+    TemplateID: templateId,
+    Дата: isoDate,
+    Название: template['Название'],
+    'Длительность, мин': '',
+    Заметки: '',
+    Статус: 'Запланирована',
+  });
+  saveDB(db);
+  return wId;
+}
+
+async function startPlannedWorkout(workoutId) {
+  if (!workoutId) throw new Error('Не указана тренировка.');
+  const db = loadDB();
+  const w = db[CFG.WORKOUTS].find((x) => x.WorkoutID === workoutId);
+  if (!w) throw new Error('Тренировка не найдена.');
+  if (w['Статус'] !== 'Запланирована') throw new Error('Эта тренировка уже не в статусе "Запланирована".');
+  const active = db[CFG.WORKOUTS].find((x) => x.UserID === w.UserID && x['Статус'] === 'В процессе');
+  if (active) throw new Error('У этого спортсмена уже есть незавершённая тренировка — сначала заверши её.');
+  w['Статус'] = 'В процессе';
+  w['Дата'] = now();
+  saveDB(db);
+  return workoutId;
+}
+
 async function saveAllSets(workoutId, setsArray) {
   if (!workoutId || !setsArray || !setsArray.length) throw new Error('Нет данных для сохранения');
   const db = loadDB();
@@ -349,6 +386,8 @@ module.exports = {
   deleteTemplateExercise,
   updateTemplateOrder,
   startWorkout,
+  planWorkout,
+  startPlannedWorkout,
   saveAllSets,
   finishWorkout,
   deleteWorkout,
