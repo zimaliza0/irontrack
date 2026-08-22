@@ -321,13 +321,30 @@ function userTemplates(){return DATA.templates.filter(t=>t['Активен']!==f
 function renderWorkout(){const templates=userTemplates();let html='';if(!currentWorkoutId){html+='<div class="card"><div class="title">Начать новую тренировку</div><div class="sub">Шаблоны только выбранного спортсмена.</div><div style="height:10px"></div><div class="form"><div class="field full"><label>Шаблон</label><select id="tpl">'+(templates.length?templates.map(t=>'<option value="'+esc(t.TemplateID)+'">'+esc(t['Название'])+'</option>').join(''):'<option value="">Сначала создай шаблон для этого спортсмена</option>')+'</select></div><button class="btn full" '+(templates.length?'':'disabled')+' onclick="startWorkout()">Начать тренировку</button></div></div>';}else{html+=workoutCard()}$('view').innerHTML=html}
 function startWorkout(){const template=$('tpl').value;if(!template){toast('Создай шаблон для этого спортсмена');return}invoke('startWorkout',[uid(),template],id=>{currentWorkoutId=id;toast('Тренировка началась');load()})}
 function allTimeBest(exerciseId){return Math.max.apply(null,DATA.sets.filter(s=>s.ExerciseID===exerciseId).filter(s=>{const w=DATA.workouts.find(x=>x.WorkoutID===s.WorkoutID);return w&&w.UserID===uid()&&w['Статус']==='Завершена'}).map(s=>Number(s['e1RM, кг'])||0).concat([0]))}
-// Рекомендуемые рабочие веса от лучшего e1RM: 85% — стандартная "силовая" зона,
-// вес на 15 повторений — через обратную формулу Эпли (w = 1RM / (1 + reps/30)).
+// Рекомендуемые рабочие веса от лучшего e1RM.
+// Раньше для веса на 15 повторов инвертировалась только формула Эпли — для лёгких
+// изолирующих упражнений (небольшие веса, где шаг округления 2.5кг относительно велик)
+// результат почти всегда схлопывался обратно к тому же весу, что и выполненный подход.
+// Теперь считаем средним по всем 4 формулам в обратную сторону (как и при прямом расчёте
+// e1RM), а шаг округления делаем адаптивным: для лёгких весов (гантели, изоляция) — 1 кг,
+// для средних — 2.5 кг, для тяжёлых базовых движений — 5 кг.
+function reverseE1RMToReps(e1rmValue, targetReps){
+  const r = Math.min(Math.max(targetReps, 1), 36);
+  const epley = e1rmValue / (1 + targetReps / 30);
+  const brzycki = e1rmValue * (37 - r) / 36;
+  const lombardi = e1rmValue / Math.pow(targetReps, 0.10);
+  const oconner = e1rmValue / (1 + 0.025 * targetReps);
+  return (epley + brzycki + lombardi + oconner) / 4;
+}
+function roundToStep(value, referenceWeight){
+  const step = referenceWeight < 20 ? 1 : (referenceWeight < 60 ? 2.5 : 5);
+  return Math.round(value / step) * step;
+}
 function recommendedWeights(best){
   if (!best) return null;
   return {
-    top: Math.round((best * 0.85) / 2.5) * 2.5,
-    fifteenRM: Math.round((best / (1 + 15/30)) / 2.5) * 2.5,
+    top: roundToStep(best * 0.85, best),
+    fifteenRM: roundToStep(reverseE1RMToReps(best, 15), best),
   };
 }
 
@@ -631,25 +648,31 @@ function addTemplate(){invoke('addTemplate',[{name:$('tn').value,description:$('
 function templateItem(t){const ex=DATA.templateEx.filter(x=>x.TemplateID===t.TemplateID).sort((a,b)=>Number(a['Порядок'])-Number(b['Порядок']));return '<div class="item"><div class="row"><div><b>'+esc(t['Название'])+'</b><div class="template-owner">'+ex.length+' упражн. · создан '+date(t['Создан'])+'</div><div class="sub">'+esc(t['Описание']||'')+'</div></div><button class="btn small secondary" onclick="editTemplate(\''+esc(t.TemplateID)+'\')">Изменить</button></div><div class="sub" style="margin-top:8px">'+(ex.length?ex.map(x=>{const e=DATA.exercises.find(y=>y.ExerciseID===x.ExerciseID);return esc(e?e['Название']:x.ExerciseID)+' · '+esc(x['Сеты'])+'×'+esc(x['Повторы'])}).join('<br>'):'Упражнений нет')+'</div></div>'}
 let localExercises = []; let currentTemplateId = null;
 
-// Список упражнений для добавления в шаблон: сгруппирован по мышечной группе,
-// с живым поиском по подстроке (а не только с начала слова) — набрав "верх",
-// найдётся и «Тяга верхнего блока».
+// Список упражнений для добавления в шаблон: сгруппирован по категории (не по мышце —
+// в поле "Мышца" встречаются дубли вроде "Квадрицепс" / "Квадрицепс " с пробелом, а
+// "Категория" заполнена аккуратнее и это более крупная, понятная группировка).
+// Группировка нормализована (обрезка пробелов + без учёта регистра), чтобы разный
+// регистр или случайный пробел не плодили дублирующиеся группы в списке.
 function buildExercisePicker(){
   const groups = {};
   DATA.exercises.forEach(e => {
-    const key = e['Мышца'] && e['Мышца'].trim() ? e['Мышца'] : 'Без группы';
-    (groups[key] = groups[key] || []).push(e);
+    const raw = (e['Категория'] || '').trim();
+    const label = raw || 'Без категории';
+    const key = label.toLowerCase();
+    if (!groups[key]) groups[key] = { label, items: [] };
+    groups[key].items.push(e);
   });
-  const groupNames = Object.keys(groups).sort((a,b)=>a.localeCompare(b,'ru'));
-  return groupNames.map(g => {
-    const items = groups[g].map(e => {
+  const keys = Object.keys(groups).sort((a,b)=>groups[a].label.localeCompare(groups[b].label,'ru'));
+  return keys.map(key => {
+    const { label, items } = groups[key];
+    const rowsHtml = items.map(e => {
       const searchBlob = [e['Название'], e['Категория'], e['Мышца'], e['Оборудование']].join(' ').toLowerCase();
       return '<label class="ex-pick-item" data-search="'+esc(searchBlob)+'" style="display:flex;align-items:center;justify-content:space-between;padding:9px 4px;border-bottom:1px solid #222;cursor:pointer">'
         + '<span>'+esc(e['Название'])+'</span>'
         + '<input type="checkbox" class="ex-check" value="'+esc(e.ExerciseID)+'" style="width:20px;height:20px;flex-shrink:0">'
         + '</label>';
     }).join('');
-    return '<details class="ex-group"><summary style="cursor:pointer;padding:9px 4px;font-weight:800;color:var(--muted)">'+esc(g)+' <span class="sub">('+groups[g].length+')</span></summary>'+items+'</details>';
+    return '<details class="ex-group"><summary style="cursor:pointer;padding:9px 4px;font-weight:800;color:var(--muted)">'+esc(label)+' <span class="sub">('+items.length+')</span></summary>'+rowsHtml+'</details>';
   }).join('');
 }
 function filterExercisePicker(){
