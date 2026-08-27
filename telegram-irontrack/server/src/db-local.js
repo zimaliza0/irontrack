@@ -19,6 +19,9 @@ const CFG = {
   WORKOUTS: 'Тренировки',
   SETS: 'Подходы',
   PROGRESS: 'Прогресс',
+  BODYWEIGHT: 'Вес_Тела',
+  NUTRITION_TARGETS: 'КБЖУ_Цель',
+  NUTRITION_LOG: 'КБЖУ_Дневник',
 };
 
 const TABLES = Object.values(CFG);
@@ -55,15 +58,30 @@ function id(prefix) {
 }
 function now() { return new Date().toISOString(); }
 function n(v, fallback) { const x = Number(v); return Number.isFinite(x) ? x : (fallback === undefined ? 0 : fallback); }
-function e1rm(weight, reps) {
+function e1rmRaw(weight, reps) {
   if (reps <= 1) return weight;
   const r = Math.min(reps, 36);
   const epley = weight * (1 + reps / 30);
   const brzycki = weight * 36 / (37 - r);
   const lombardi = weight * Math.pow(reps, 0.10);
   const oconner = weight * (1 + 0.025 * reps);
-  const avg = (epley + brzycki + lombardi + oconner) / 4;
-  return Math.round(avg / 2.5) * 2.5;
+  return (epley + brzycki + lombardi + oconner) / 4;
+}
+function roundToStep(value, referenceWeight) {
+  const step = referenceWeight < 20 ? 1 : (referenceWeight < 60 ? 2.5 : 5);
+  return Math.round(value / step) * step;
+}
+// Для лёгких гантелей (до 15кг) формулы 1ПМ на высоких повторах заметно завышают истинный
+// максимум — компенсируем скидкой, растущей с числом повторов сверх 10 (максимум 20%).
+function e1rm(weight, reps, exercise) {
+  const equip = ((exercise && exercise['Оборудование']) || '').toLowerCase();
+  const isLightDumbbell = equip.includes('гантел') && weight > 0 && weight < 15;
+  let raw = e1rmRaw(weight, reps);
+  if (isLightDumbbell) {
+    const discount = Math.min(0.20, Math.max(0, reps - 10) * 0.02);
+    raw = raw * (1 - discount);
+  }
+  return roundToStep(raw, weight);
 }
 
 async function ensureSchema() { ensureFile(); }
@@ -92,7 +110,18 @@ async function addUser(payload) {
     'Рост, см': payload.height ? n(payload.height) : '',
     'Вес, кг': payload.weight ? n(payload.weight) : '',
     Активен: true,
+    TelegramID: String((payload && payload.telegramId) || '').trim(),
   });
+  saveDB(db);
+  return true;
+}
+
+async function linkUserTelegramId(userId, telegramId) {
+  if (!userId) throw new Error('Не указан спортсмен.');
+  const db = loadDB();
+  const u = db[CFG.USERS].find((x) => x.UserID === userId);
+  if (!u) throw new Error('Спортсмен не найден.');
+  u.TelegramID = String(telegramId || '').trim();
   saveDB(db);
   return true;
 }
@@ -244,6 +273,8 @@ async function saveAllSets(workoutId, setsArray) {
   const db = loadDB();
   const workout = db[CFG.WORKOUTS].find((w) => w.WorkoutID === workoutId);
   if (!workout) throw new Error('Тренировка не найдена');
+  const exMap = {};
+  db[CFG.EXERCISES].forEach((e) => { exMap[e.ExerciseID] = e; });
 
   setsArray.forEach((s) => {
     const weight = n(s.weight, 0);
@@ -258,7 +289,7 @@ async function saveAllSets(workoutId, setsArray) {
       Повторы: reps,
       RPE: s.rpe || '',
       'Подход до отказа': false,
-      'e1RM, кг': e1rm(weight, reps),
+      'e1RM, кг': e1rm(weight, reps, exMap[s.exerciseId]),
       'Дата/время': now(),
       Комментарий: s.comment || '',
     });
@@ -375,6 +406,71 @@ async function getBackup(backupId) {
   return JSON.parse(fs.readFileSync(file, 'utf8'));
 }
 
+async function logBodyWeight(userId, dateStr, weight) {
+  if (!userId || !dateStr) throw new Error('Не хватает данных.');
+  const w = n(weight, 0);
+  if (w <= 0) throw new Error('Укажи вес больше нуля.');
+  const db = loadDB();
+  const recId = userId + '_' + dateStr;
+  const existing = db[CFG.BODYWEIGHT].find((r) => r.id === recId);
+  if (existing) existing['Вес, кг'] = w;
+  else db[CFG.BODYWEIGHT].push({ id: recId, UserID: userId, Дата: dateStr, 'Вес, кг': w });
+  saveDB(db);
+  return true;
+}
+async function getBodyWeightLog(userId) {
+  const db = loadDB();
+  return db[CFG.BODYWEIGHT]
+    .filter((r) => r.UserID === userId)
+    .sort((a, b) => new Date(a['Дата']) - new Date(b['Дата']));
+}
+
+async function setNutritionTarget(userId, target) {
+  if (!userId) throw new Error('Не указан спортсмен.');
+  const db = loadDB();
+  const rec = {
+    UserID: userId,
+    Калории: n(target.calories, 0),
+    'Белки, г': n(target.protein, 0),
+    'Жиры, г': n(target.fat, 0),
+    'Углеводы, г': n(target.carbs, 0),
+  };
+  const idx = db[CFG.NUTRITION_TARGETS].findIndex((r) => r.UserID === userId);
+  if (idx >= 0) db[CFG.NUTRITION_TARGETS][idx] = rec;
+  else db[CFG.NUTRITION_TARGETS].push(rec);
+  saveDB(db);
+  return true;
+}
+async function getNutritionTarget(userId) {
+  const db = loadDB();
+  return db[CFG.NUTRITION_TARGETS].find((r) => r.UserID === userId) || null;
+}
+async function logNutrition(userId, dateStr, values) {
+  if (!userId || !dateStr) throw new Error('Не хватает данных.');
+  const db = loadDB();
+  const recId = userId + '_' + dateStr;
+  const rec = {
+    id: recId,
+    UserID: userId,
+    Дата: dateStr,
+    Калории: n(values.calories, 0),
+    'Белки, г': n(values.protein, 0),
+    'Жиры, г': n(values.fat, 0),
+    'Углеводы, г': n(values.carbs, 0),
+  };
+  const idx = db[CFG.NUTRITION_LOG].findIndex((r) => r.id === recId);
+  if (idx >= 0) db[CFG.NUTRITION_LOG][idx] = rec;
+  else db[CFG.NUTRITION_LOG].push(rec);
+  saveDB(db);
+  return true;
+}
+async function getNutritionLog(userId) {
+  const db = loadDB();
+  return db[CFG.NUTRITION_LOG]
+    .filter((r) => r.UserID === userId)
+    .sort((a, b) => new Date(a['Дата']) - new Date(b['Дата']));
+}
+
 module.exports = {
   CFG,
   ensureSchema,
@@ -393,7 +489,14 @@ module.exports = {
   deleteWorkout,
   getProgress,
   deleteUser,
+  linkUserTelegramId,
   createBackup,
   listBackups,
   getBackup,
+  logBodyWeight,
+  getBodyWeightLog,
+  setNutritionTarget,
+  getNutritionTarget,
+  logNutrition,
+  getNutritionLog,
 };

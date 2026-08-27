@@ -226,6 +226,14 @@ const API_ROUTES = {
   createBackup: () => ({ method: 'POST', url: '/api/backups' }),
   listBackups: () => ({ method: 'GET', url: '/api/backups' }),
   getBackup: (backupId) => ({ method: 'GET', url: '/api/backups/' + encodeURIComponent(backupId) }),
+  logBodyWeight: (userId, dateStr, weight) => ({ method: 'POST', url: '/api/bodyweight', body: { userId, date: dateStr, weight } }),
+  getBodyWeightLog: (userId) => ({ method: 'GET', url: '/api/bodyweight?userId=' + encodeURIComponent(userId || '') }),
+  getNutritionTarget: (userId) => ({ method: 'GET', url: '/api/nutrition/target?userId=' + encodeURIComponent(userId || '') }),
+  setNutritionTarget: (userId, target) => ({ method: 'POST', url: '/api/nutrition/target', body: Object.assign({ userId }, target) }),
+  logNutrition: (userId, dateStr, values) => ({ method: 'POST', url: '/api/nutrition/log', body: Object.assign({ userId, date: dateStr }, values) }),
+  getNutritionLog: (userId) => ({ method: 'GET', url: '/api/nutrition/log?userId=' + encodeURIComponent(userId || '') }),
+  getMe: () => ({ method: 'GET', url: '/api/me' }),
+  linkUserTelegramId: (userId, telegramId) => ({ method: 'POST', url: '/api/users/' + encodeURIComponent(userId) + '/telegram', body: { telegramId } }),
 };
 
 async function callBackend(fnName, args) {
@@ -268,6 +276,7 @@ window.google = { script: { run: makeRunProxy(), host: { close: function(){ if (
 const ua=navigator.userAgent||'';const mobileUA=/iPhone|iPad|iPod|Android|Mobile/i.test(ua);if(mobileUA||window.matchMedia('(hover:none) and (pointer:coarse)').matches||window.innerWidth<=760)document.documentElement.classList.add('is-mobile');
 let DATA={users:[],exercises:[],templates:[],templateEx:[],workouts:[],sets:[]};let activeView='home';let currentWorkoutId=null;let activeHistoryWorkoutId=null;let timerHandle=null;
 let calScale='week';let calAnchor=new Date();let calSelectedDay=null;let planPickerOpen=false;
+let MY_ROLE='trainer';let MY_ATHLETE_ID=null;
 const $=id=>document.getElementById(id);function busy(on){$('loading').classList.toggle('on',on)}function toast(text){const x=$('toast');x.textContent=text;x.style.display='block';clearTimeout(window.__toast);window.__toast=setTimeout(()=>x.style.display='none',2500)}function esc(v){return String(v==null?'':v).replace(/[&<>'"]/g,s=>({'&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#39;','"':'&quot;'}[s]))}function uid(){return $('userSelect').value}function date(v){if(!v)return '—';const d=new Date(v);return isNaN(d)?String(v):d.toLocaleDateString('ru-RU')}function time(v){if(!v)return '—';const d=new Date(v);return isNaN(d)?String(v):d.toLocaleTimeString('ru-RU',{hour:'2-digit',minute:'2-digit'})}
 
 // --- Кэш данных на случай обрыва связи ---
@@ -311,18 +320,43 @@ function load(){
     busy(false);
     DATA=d||DATA;
     saveCache(DATA);
-    fillUsers();syncActiveWorkout();render();startTimerLoop();
+    fillUsers();syncActiveWorkout();render();startTimerLoop();applyRoleUI();
   }).withFailureHandler(e=>{
     busy(false);
     const cached = loadCache();
     if (cached && (cached.users||[]).length) {
       DATA = cached;
-      fillUsers();syncActiveWorkout();render();startTimerLoop();
+      fillUsers();syncActiveWorkout();render();startTimerLoop();applyRoleUI();
       toast('Нет соединения — показаны сохранённые данные');
     } else {
       showError(e&&e.message?e.message:String(e));
     }
   }).getAppData();
+}
+// Кто сейчас пользуется приложением — тренер (полный доступ) или конкретный привязанный
+// клиент (видит и правит только свои данные). Определяется один раз при запуске.
+function fetchMyRole(){
+  google.script.run.withSuccessHandler(me=>{
+    MY_ROLE = (me && me.role) || 'trainer';
+    MY_ATHLETE_ID = (me && me.athleteUserId) || null;
+    applyRoleUI();
+  }).withFailureHandler(()=>{ /* не удалось — по умолчанию ведём себя как тренер, сервер всё равно проверит права на каждом действии */ }).getMe();
+}
+function applyRoleUI(){
+  const isAthlete = MY_ROLE === 'athlete';
+  document.querySelectorAll('[data-view="library"]').forEach(el => { el.style.display = isAthlete ? 'none' : ''; });
+  const sel = $('userSelect');
+  if (sel) {
+    if (isAthlete && MY_ATHLETE_ID) {
+      sel.value = MY_ATHLETE_ID;
+      sel.disabled = true;
+      sel.style.opacity = '0.7';
+    } else {
+      sel.disabled = false;
+      sel.style.opacity = '';
+    }
+  }
+  if (isAthlete && activeView === 'library') nav('home');
 }
 function fillUsers(){const s=$('userSelect');const current=s.value;s.innerHTML=DATA.users.map(u=>'<option value="'+esc(u.UserID)+'">'+esc(u['Имя'])+'</option>').join('');if(current&&DATA.users.some(u=>u.UserID===current))s.value=current;else if(DATA.users[0])s.value=DATA.users[0].UserID;s.onchange=()=>{activeHistoryWorkoutId=null;syncActiveWorkout();render()}}
 function syncActiveWorkout(){const u=uid();const active=DATA.workouts.filter(w=>w.UserID===u&&w['Статус']==='В процессе').sort((a,b)=>new Date(b['Дата'])-new Date(a['Дата']))[0];currentWorkoutId=active?active.WorkoutID:null}
@@ -764,7 +798,17 @@ function renderLibrary(){
   refreshBackupsList();
 }
 function userItem(u){
-  return '<div class="item row"><div><b>'+esc(u['Имя'])+'</b><div class="sub">'+esc(u['Пол']||'')+(u['Пол']?' · ':'')+(u['Вес, кг']?esc(u['Вес, кг'])+' кг':'')+'</div></div><button class="btn small red" onclick="deleteUserFromLibrary(\''+esc(u.UserID)+'\')">Удалить</button></div>';
+  const tgId = u.TelegramID || '';
+  const tgLabel = tgId ? 'Telegram привязан (ID '+esc(tgId)+')' : 'Telegram не привязан';
+  return '<div class="item"><div class="row"><div><b>'+esc(u['Имя'])+'</b><div class="sub">'+esc(u['Пол']||'')+(u['Пол']?' · ':'')+(u['Вес, кг']?esc(u['Вес, кг'])+' кг':'')+'</div></div><button class="btn small red" onclick="deleteUserFromLibrary(\''+esc(u.UserID)+'\')">Удалить</button></div><div class="row" style="margin-top:6px"><span class="sub">'+tgLabel+'</span><button class="btn small secondary" onclick="promptLinkTelegram(\''+esc(u.UserID)+'\',\''+esc(tgId)+'\')">'+(tgId?'Изменить':'Привязать')+'</button></div></div>';
+}
+function promptLinkTelegram(userId, currentId){
+  const value = prompt('Telegram ID клиента (числовой, можно узнать у @userinfobot). Оставь пустым, чтобы отвязать.', currentId || '');
+  if (value === null) return; // отмена
+  invoke('linkUserTelegramId', [userId, value.trim()], () => {
+    toast(value.trim() ? 'Telegram привязан' : 'Telegram отвязан');
+    load();
+  });
 }
 function deleteUserFromLibrary(userId){
   const u = DATA.users.find(x=>x.UserID===userId);
@@ -1048,24 +1092,142 @@ function renderProgress(){
     const cur = byEx[s.ExerciseID][w.WorkoutID];
     if (!cur || e1 > cur.value) byEx[s.ExerciseID][w.WorkoutID] = { date: w['Дата'], value: e1 };
   });
-
   const exIds = Object.keys(byEx);
+
+  let html = '<div id="bodyweightSection" class="card"><div class="empty">Загрузка…</div></div><div style="height:12px"></div><div id="nutritionSection" class="card"><div class="empty">Загрузка…</div></div><div style="height:12px"></div>';
+
   if (!exIds.length) {
-    $('view').innerHTML = '<div class="card"><div class="title">Прогресс 1ПМ</div><div class="empty">У этого спортсмена пока нет завершённых тренировок с подходами.</div></div>';
-    return;
+    html += '<div class="card"><div class="title">Прогресс 1ПМ</div><div class="empty">У этого спортсмена пока нет завершённых тренировок с подходами.</div></div>';
+  } else {
+    // Упражнения с самой недавней активностью — сверху
+    const withMeta = exIds.map(exId=>{
+      const points = Object.values(byEx[exId]).sort((a,b)=>new Date(a.date)-new Date(b.date));
+      const ex = DATA.exercises.find(e=>e.ExerciseID===exId);
+      return { exId, name: ex ? ex['Название'] : exId, points, lastDate: new Date(points[points.length-1].date).getTime() };
+    }).sort((a,b)=>b.lastDate - a.lastDate);
+    html += '<div class="stack">';
+    withMeta.forEach(item=>{ html += progressChartCard(item.name, item.points); });
+    html += '</div>';
   }
-
-  // Упражнения с самой недавней активностью — сверху
-  const withMeta = exIds.map(exId=>{
-    const points = Object.values(byEx[exId]).sort((a,b)=>new Date(a.date)-new Date(b.date));
-    const ex = DATA.exercises.find(e=>e.ExerciseID===exId);
-    return { exId, name: ex ? ex['Название'] : exId, points, lastDate: new Date(points[points.length-1].date).getTime() };
-  }).sort((a,b)=>b.lastDate - a.lastDate);
-
-  let html = '<div class="stack">';
-  withMeta.forEach(item=>{ html += progressChartCard(item.name, item.points); });
-  html += '</div>';
   $('view').innerHTML = html;
+  loadBodyWeightSection();
+  loadNutritionSection();
+}
+
+// Простой линейный график для веса тела / калорий — не завязан на recommendedWeights,
+// в отличие от progressChartCard (там ещё считается 85%/15ПМ, здесь не нужно).
+function lineChartSvg(points, unit){
+  if (points.length < 2) {
+    const v = points[0] ? points[0].value : 0;
+    return points.length
+      ? '<div class="metric" style="text-align:left"><div class="num">'+v.toFixed(1)+' '+esc(unit)+'</div><div class="label">пока только одна запись</div></div>'
+      : '';
+  }
+  const vals = points.map(p=>p.value), labels = points.map(p=>date(p.date));
+  const max = Math.max(...vals), min = Math.min(...vals);
+  const W = 760, H = 150, pad = 26;
+  const span = Math.max(max-min, max*0.05, 1);
+  const rangeMin = min - span*0.15, rangeMax = max + span*0.15, range = rangeMax-rangeMin;
+  const pts = vals.map((v,i)=>{
+    const x = pad + i*((W-2*pad)/Math.max(vals.length-1,1));
+    const y = H-pad-((v-rangeMin)/range)*(H-2*pad);
+    return [x,y];
+  });
+  const svg = '<svg viewBox="0 0 '+W+' '+H+'" width="100%" height="100%">'
+    + '<line x1="'+pad+'" y1="'+(H-pad)+'" x2="'+(W-pad)+'" y2="'+(H-pad)+'" stroke="#333"/>'
+    + '<polyline fill="none" stroke="#e50914" stroke-width="4" points="'+pts.map(a=>a.join(',')).join(' ')+'"/>'
+    + pts.map((a,i)=>'<circle cx="'+a[0]+'" cy="'+a[1]+'" r="4" fill="#fff" stroke="#e50914" stroke-width="3"><title>'+esc(labels[i])+' — '+vals[i].toFixed(1)+' '+esc(unit)+'</title></circle>').join('')
+    + '</svg>';
+  return '<div class="chart" style="height:150px">'+svg+'</div><div class="legend"><span>'+esc(labels[0])+'</span><b>'+vals[vals.length-1].toFixed(1)+' '+esc(unit)+'</b><span>'+esc(labels[labels.length-1])+'</span></div>';
+}
+
+// --- Вес тела ---
+function loadBodyWeightSection(){
+  google.script.run
+    .withSuccessHandler(log => renderBodyWeightSection(log || []))
+    .withFailureHandler(() => { const el=$('bodyweightSection'); if(el) el.innerHTML='<div class="empty">Не удалось загрузить вес тела.</div>'; })
+    .getBodyWeightLog(uid());
+}
+function renderBodyWeightSection(log){
+  const el = $('bodyweightSection');
+  if (!el) return;
+  const points = log.map(r=>({date:r['Дата'], value:Number(r['Вес, кг'])||0}));
+  const todayStr = new Date().toISOString().slice(0,10);
+  let html = '<div class="title" style="margin-bottom:10px">Вес тела</div>';
+  html += '<div class="form"><div class="field"><label>Дата</label><input type="date" id="bwDate" value="'+todayStr+'"></div><div class="field"><label>Вес, кг</label><input type="number" step="0.1" inputmode="decimal" id="bwValue" placeholder="0"></div></div><div style="height:10px"></div><button class="btn" style="width:100%" onclick="submitBodyWeight()">Сохранить</button>';
+  if (points.length) {
+    html += '<div style="height:14px"></div>' + lineChartSvg(points, 'кг');
+  } else {
+    html += '<div style="height:10px"></div><div class="empty">Пока нет записей веса.</div>';
+  }
+  el.innerHTML = html;
+}
+function submitBodyWeight(){
+  const dateStr = $('bwDate').value;
+  const weight = $('bwValue').value;
+  if (!dateStr || !weight) { toast('Укажи дату и вес'); return; }
+  invoke('logBodyWeight', [uid(), dateStr, weight], () => {
+    toast('Вес сохранён');
+    loadBodyWeightSection();
+  });
+}
+
+// --- КБЖУ ---
+let _nutTarget = null, _nutLog = null;
+function loadNutritionSection(){
+  _nutTarget = null; _nutLog = null;
+  google.script.run.withSuccessHandler(t => { _nutTarget = t || {}; maybeRenderNutrition(); }).withFailureHandler(() => { _nutTarget = {}; maybeRenderNutrition(); }).getNutritionTarget(uid());
+  google.script.run.withSuccessHandler(l => { _nutLog = l || []; maybeRenderNutrition(); }).withFailureHandler(() => { _nutLog = []; maybeRenderNutrition(); }).getNutritionLog(uid());
+}
+function maybeRenderNutrition(){
+  if (_nutTarget === null || _nutLog === null) return;
+  renderNutritionSection(_nutTarget, _nutLog);
+}
+function renderNutritionSection(target, log){
+  const el = $('nutritionSection');
+  if (!el) return;
+  const t = target || {};
+  const todayStr = new Date().toISOString().slice(0,10);
+  let html = '<div class="title" style="margin-bottom:4px">КБЖУ</div>';
+  html += '<div class="sub" style="margin-bottom:8px">Норма на день</div>';
+  html += '<div class="form"><div class="field"><label>Калории</label><input type="number" inputmode="numeric" id="nutTargetCal" value="'+esc(t['Калории']||'')+'" placeholder="0"></div><div class="field"><label>Белки, г</label><input type="number" inputmode="numeric" id="nutTargetP" value="'+esc(t['Белки, г']||'')+'" placeholder="0"></div><div class="field"><label>Жиры, г</label><input type="number" inputmode="numeric" id="nutTargetF" value="'+esc(t['Жиры, г']||'')+'" placeholder="0"></div><div class="field"><label>Углеводы, г</label><input type="number" inputmode="numeric" id="nutTargetC" value="'+esc(t['Углеводы, г']||'')+'" placeholder="0"></div></div><div style="height:8px"></div><button class="btn secondary" style="width:100%" onclick="submitNutritionTarget()">Сохранить норму</button>';
+
+  html += '<div class="divider"></div><div class="sub" style="margin-bottom:8px">Записать день</div>';
+  html += '<div class="form"><div class="field"><label>Дата</label><input type="date" id="nutLogDate" value="'+todayStr+'"></div><div class="field"><label>Калории</label><input type="number" inputmode="numeric" id="nutLogCal" placeholder="0"></div><div class="field"><label>Белки, г</label><input type="number" inputmode="numeric" id="nutLogP" placeholder="0"></div><div class="field"><label>Жиры, г</label><input type="number" inputmode="numeric" id="nutLogF" placeholder="0"></div><div class="field"><label>Углеводы, г</label><input type="number" inputmode="numeric" id="nutLogC" placeholder="0"></div></div><div style="height:8px"></div><button class="btn" style="width:100%" onclick="submitNutritionLog()">Сохранить день</button>';
+
+  if (log.length) {
+    const points = log.map(r=>({date:r['Дата'], value:Number(r['Калории'])||0}));
+    html += '<div class="divider"></div><div class="sub" style="margin-bottom:6px">Калории по дням'+(t['Калории']?' · норма '+esc(t['Калории'])+' ккал':'')+'</div>' + lineChartSvg(points,'ккал');
+    const last = log.slice(-7).reverse();
+    html += '<div style="height:10px"></div><div class="list">' + last.map(r=>{
+      const diff = t['Калории'] ? (Number(r['Калории'])-Number(t['Калории'])) : null;
+      const diffLabel = diff===null ? '' : ((diff>0?'+':'')+Math.round(diff)+' ккал к норме');
+      return '<div class="item"><div class="row"><b>'+date(r['Дата'])+'</b><span class="sub">'+esc(diffLabel)+'</span></div><div class="sub">'+Math.round(r['Калории']||0)+' ккал · Б '+Math.round(r['Белки, г']||0)+' · Ж '+Math.round(r['Жиры, г']||0)+' · У '+Math.round(r['Углеводы, г']||0)+'</div></div>';
+    }).join('') + '</div>';
+  } else {
+    html += '<div class="divider"></div><div class="empty">Пока нет записей КБЖУ.</div>';
+  }
+  el.innerHTML = html;
+}
+function submitNutritionTarget(){
+  const target = {
+    calories: $('nutTargetCal').value,
+    protein: $('nutTargetP').value,
+    fat: $('nutTargetF').value,
+    carbs: $('nutTargetC').value,
+  };
+  invoke('setNutritionTarget', [uid(), target], () => { toast('Норма сохранена'); loadNutritionSection(); });
+}
+function submitNutritionLog(){
+  const dateStr = $('nutLogDate').value;
+  if (!dateStr) { toast('Укажи дату'); return; }
+  const values = {
+    calories: $('nutLogCal').value,
+    protein: $('nutLogP').value,
+    fat: $('nutLogF').value,
+    carbs: $('nutLogC').value,
+  };
+  invoke('logNutrition', [uid(), dateStr, values], () => { toast('День сохранён'); loadNutritionSection(); });
 }
 function progressChartCard(title, points){
   const vals = points.map(p=>p.value);
@@ -1111,6 +1273,7 @@ document.addEventListener('focus', function(e){
 }, true);
 
 updateOnlineStatus();
+fetchMyRole();
 load();
 </script>
 </body>

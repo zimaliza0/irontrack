@@ -23,17 +23,39 @@ const crypto = require('crypto');
 function now() { return new Date().toISOString(); }
 function n(v, fallback) { const x = Number(v); return Number.isFinite(x) ? x : (fallback === undefined ? 0 : fallback); }
 // Оценка 1ПМ — среднее сразу нескольких признанных формул вместо одной, чтобы сгладить
-// погрешность каждой отдельной формулы на разных диапазонах повторов. Результат округляется
-// до ближайших 2.5 кг (стандартный шаг блинов).
-function e1rm(weight, reps) {
+// погрешность каждой отдельной формулы на разных диапазонах повторов.
+function e1rmRaw(weight, reps) {
   if (reps <= 1) return weight;
   const r = Math.min(reps, 36); // Brzycki не определена при reps>=37, подстраховка
   const epley = weight * (1 + reps / 30);
   const brzycki = weight * 36 / (37 - r);
   const lombardi = weight * Math.pow(reps, 0.10);
   const oconner = weight * (1 + 0.025 * reps);
-  const avg = (epley + brzycki + lombardi + oconner) / 4;
-  return Math.round(avg / 2.5) * 2.5;
+  return (epley + brzycki + lombardi + oconner) / 4;
+}
+// Для гантельных упражнений с весом до 15кг (в одной руке) формулы 1ПМ (Epley и др.)
+// откалиброваны в основном на диапазоне 1-10 повторов с ощутимыми весами. На лёгких
+// гантелях при большом числе повторов они заметно завышают истинный 1ПМ — усталость
+// мелких стабилизирующих мышц и координация играют относительно бОльшую роль, чем на
+// тяжёлых базовых движениях. Компенсируем скидкой, растущей с числом повторов сверх 10,
+// максимум 20% при 20+ повторах. Для тяжёлых гантелей (15кг+) и любого другого инвентаря
+// скидка не применяется.
+// Шаг округления итогового результата подстраивается под вес: для лёгких весов (гантели,
+// изоляция) плоские 2.5кг съедали бы небольшие поправки (вроде скидки на повторы ниже)
+// обратно к тому же числу — поэтому округляем мельче.
+function roundToStep(value, referenceWeight) {
+  const step = referenceWeight < 20 ? 1 : (referenceWeight < 60 ? 2.5 : 5);
+  return Math.round(value / step) * step;
+}
+function e1rm(weight, reps, exercise) {
+  const equip = ((exercise && exercise['Оборудование']) || '').toLowerCase();
+  const isLightDumbbell = equip.includes('гантел') && weight > 0 && weight < 15;
+  let raw = e1rmRaw(weight, reps);
+  if (isLightDumbbell) {
+    const discount = Math.min(0.20, Math.max(0, reps - 10) * 0.02);
+    raw = raw * (1 - discount);
+  }
+  return roundToStep(raw, weight);
 }
 function bool(v) { return v ? 1 : 0; }
 function fromBool(v) { return v === 1 || v === true; }
@@ -46,7 +68,8 @@ const TABLES = {
     "Дата рождения" TEXT,
     "Рост, см" REAL,
     "Вес, кг" REAL,
-    "Активен" INTEGER DEFAULT 1
+    "Активен" INTEGER DEFAULT 1,
+    "TelegramID" TEXT
   )`,
   exercises: `CREATE TABLE IF NOT EXISTS exercises (
     "ExerciseID" TEXT PRIMARY KEY,
@@ -116,6 +139,28 @@ const TABLES = {
     "Reason" TEXT,
     "Data" TEXT
   )`,
+  bodyweight: `CREATE TABLE IF NOT EXISTS bodyweight (
+    "id" TEXT PRIMARY KEY,
+    "UserID" TEXT,
+    "Дата" TEXT,
+    "Вес, кг" REAL
+  )`,
+  nutrition_targets: `CREATE TABLE IF NOT EXISTS nutrition_targets (
+    "UserID" TEXT PRIMARY KEY,
+    "Калории" REAL,
+    "Белки, г" REAL,
+    "Жиры, г" REAL,
+    "Углеводы, г" REAL
+  )`,
+  nutrition_log: `CREATE TABLE IF NOT EXISTS nutrition_log (
+    "id" TEXT PRIMARY KEY,
+    "UserID" TEXT,
+    "Дата" TEXT,
+    "Калории" REAL,
+    "Белки, г" REAL,
+    "Жиры, г" REAL,
+    "Углеводы, г" REAL
+  )`,
 };
 
 async function ensureSchema() {
@@ -123,6 +168,10 @@ async function ensureSchema() {
   for (const sql of Object.values(TABLES)) {
     await c.execute(sql);
   }
+  // Миграция для баз, созданных до появления многопользовательского доступа: добавляем
+  // колонку TelegramID в users, если её ещё нет. Если колонка уже есть — Turso вернёт
+  // ошибку "duplicate column", её просто игнорируем.
+  try { await c.execute('ALTER TABLE users ADD COLUMN "TelegramID" TEXT'); } catch (e) { /* уже есть */ }
 }
 
 async function all(sql, args) {
@@ -165,9 +214,16 @@ async function addUser(payload) {
   const name = String((payload && payload.name) || '').trim();
   if (!name) throw new Error('Укажи имя спортсмена.');
   await run(
-    `INSERT INTO users ("UserID","Имя","Пол","Дата рождения","Рост, см","Вес, кг","Активен") VALUES (?,?,?,?,?,?,1)`,
-    [id('U'), name, payload.gender || '', payload.birth || '', payload.height ? n(payload.height) : null, payload.weight ? n(payload.weight) : null]
+    `INSERT INTO users ("UserID","Имя","Пол","Дата рождения","Рост, см","Вес, кг","Активен","TelegramID") VALUES (?,?,?,?,?,?,1,?)`,
+    [id('U'), name, payload.gender || '', payload.birth || '', payload.height ? n(payload.height) : null, payload.weight ? n(payload.weight) : null, String((payload && payload.telegramId) || '').trim() || null]
   );
+  return true;
+}
+
+async function linkUserTelegramId(userId, telegramId) {
+  if (!userId) throw new Error('Не указан спортсмен.');
+  const tid = String(telegramId || '').trim();
+  await run('UPDATE users SET "TelegramID" = ? WHERE "UserID" = ?', [tid || null, userId]);
   return true;
 }
 
@@ -278,18 +334,24 @@ async function saveAllSets(workoutId, setsArray) {
   const workouts = await all('SELECT * FROM workouts WHERE "WorkoutID" = ?', [workoutId]);
   if (!workouts.length) throw new Error('Тренировка не найдена');
 
+  const exIds = [...new Set(setsArray.map((s) => s.exerciseId))];
+  const exMap = {};
+  for (const exId of exIds) {
+    const rows = await all('SELECT * FROM exercises WHERE "ExerciseID" = ?', [exId]);
+    if (rows[0]) exMap[exId] = rows[0];
+  }
+
   for (const s of setsArray) {
     const weight = n(s.weight, 0);
     const reps = n(s.reps, 0);
     if (weight <= 0 || reps <= 0) continue;
     await run(
       `INSERT INTO sets ("SetID","WorkoutID","ExerciseID","Номер подхода","Вес, кг","Повторы","RPE","Подход до отказа","e1RM, кг","Дата/время","Комментарий") VALUES (?,?,?,?,?,?,?,0,?,?,?)`,
-      [id('S'), workoutId, s.exerciseId, s.setNo || 1, weight, reps, s.rpe || null, e1rm(weight, reps), now(), s.comment || '']
+      [id('S'), workoutId, s.exerciseId, s.setNo || 1, weight, reps, s.rpe || null, e1rm(weight, reps, exMap[s.exerciseId]), now(), s.comment || '']
     );
   }
 
-  const exerciseIds = [...new Set(setsArray.map((s) => s.exerciseId))];
-  for (const exId of exerciseIds) {
+  for (const exId of exIds) {
     await upsertProgress(workoutId, exId);
   }
   return true;
@@ -397,6 +459,54 @@ async function getBackup(backupId) {
   return { id: rows[0].id, createdAt: rows[0].CreatedAt, reason: rows[0].Reason, data: JSON.parse(rows[0].Data) };
 }
 
+// --- Вес тела: одна запись на пользователя на день, повторная запись за тот же день
+// перезаписывает предыдущую (INSERT OR REPLACE по составному ключу UserID+Дата) ---
+async function logBodyWeight(userId, dateStr, weight) {
+  if (!userId || !dateStr) throw new Error('Не хватает данных.');
+  const w = n(weight, 0);
+  if (w <= 0) throw new Error('Укажи вес больше нуля.');
+  const recId = userId + '_' + dateStr;
+  await run(
+    `INSERT INTO bodyweight ("id","UserID","Дата","Вес, кг") VALUES (?,?,?,?)
+     ON CONFLICT("id") DO UPDATE SET "Вес, кг"=excluded."Вес, кг"`,
+    [recId, userId, dateStr, w]
+  );
+  return true;
+}
+async function getBodyWeightLog(userId) {
+  const rows = await all('SELECT "Дата","Вес, кг" as weight FROM bodyweight WHERE "UserID" = ?', [userId]);
+  return rows.sort((a, b) => new Date(a['Дата']) - new Date(b['Дата']));
+}
+
+// --- КБЖУ: цель (норма) — одна запись на пользователя, дневник — по одной записи в день ---
+async function setNutritionTarget(userId, target) {
+  if (!userId) throw new Error('Не указан спортсмен.');
+  await run(
+    `INSERT INTO nutrition_targets ("UserID","Калории","Белки, г","Жиры, г","Углеводы, г") VALUES (?,?,?,?,?)
+     ON CONFLICT("UserID") DO UPDATE SET "Калории"=excluded."Калории", "Белки, г"=excluded."Белки, г", "Жиры, г"=excluded."Жиры, г", "Углеводы, г"=excluded."Углеводы, г"`,
+    [userId, n(target.calories, 0), n(target.protein, 0), n(target.fat, 0), n(target.carbs, 0)]
+  );
+  return true;
+}
+async function getNutritionTarget(userId) {
+  const rows = await all('SELECT * FROM nutrition_targets WHERE "UserID" = ?', [userId]);
+  return rows[0] || null;
+}
+async function logNutrition(userId, dateStr, values) {
+  if (!userId || !dateStr) throw new Error('Не хватает данных.');
+  const recId = userId + '_' + dateStr;
+  await run(
+    `INSERT INTO nutrition_log ("id","UserID","Дата","Калории","Белки, г","Жиры, г","Углеводы, г") VALUES (?,?,?,?,?,?,?)
+     ON CONFLICT("id") DO UPDATE SET "Калории"=excluded."Калории", "Белки, г"=excluded."Белки, г", "Жиры, г"=excluded."Жиры, г", "Углеводы, г"=excluded."Углеводы, г"`,
+    [recId, userId, dateStr, n(values.calories, 0), n(values.protein, 0), n(values.fat, 0), n(values.carbs, 0)]
+  );
+  return true;
+}
+async function getNutritionLog(userId) {
+  const rows = await all('SELECT * FROM nutrition_log WHERE "UserID" = ?', [userId]);
+  return rows.sort((a, b) => new Date(a['Дата']) - new Date(b['Дата']));
+}
+
 module.exports = {
   ensureSchema,
   getAppData,
@@ -414,7 +524,14 @@ module.exports = {
   deleteWorkout,
   getProgress,
   deleteUser,
+  linkUserTelegramId,
   createBackup,
   listBackups,
   getBackup,
+  logBodyWeight,
+  getBodyWeightLog,
+  setNutritionTarget,
+  getNutritionTarget,
+  logNutrition,
+  getNutritionLog,
 };
